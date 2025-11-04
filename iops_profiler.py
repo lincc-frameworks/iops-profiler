@@ -87,6 +87,37 @@ class IOPSProfiler(Magics):
         
         return 'read' if is_read else 'write', bytes_transferred
     
+    def _parse_strace_line(self, line):
+        """Parse a single strace output line for I/O operations
+        
+        Example strace lines:
+        3385  write(3, "Hello World...", 1100) = 1100
+        3385  read(3, "data", 4096) = 133
+        3385  pread64(3, "...", 1024, 0) = 1024
+        """
+        # Match patterns like: PID syscall(fd, ..., size) = result
+        # We're interested in read, write, pread64, pwrite64 syscalls
+        match = re.match(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)', line)
+        if not match:
+            return None, 0
+        
+        pid, syscall, result = match.groups()
+        syscall = syscall.lower()
+        
+        # Check if it's a read or write operation
+        is_read = syscall in ('read', 'pread', 'pread64', 'readv', 'preadv', 'preadv2')
+        is_write = syscall in ('write', 'pwrite', 'pwrite64', 'writev', 'pwritev', 'pwritev2')
+        
+        if not (is_read or is_write):
+            return None, 0
+        
+        # The return value is the number of bytes transferred (or -1 on error)
+        bytes_transferred = int(result)
+        if bytes_transferred < 0:
+            return None, 0
+        
+        return 'read' if is_read else 'write', bytes_transferred
+    
     def _create_helper_script(self, pid, output_file, control_file):
         """Create a bash helper script that runs fs_usage with elevated privileges"""
         script_content = f'''#!/bin/bash
@@ -242,6 +273,107 @@ exit 0
                 except:
                     pass
     
+    def _measure_linux_strace(self, code):
+        """Measure IOPS on Linux using strace (no elevated privileges required)"""
+        pid = os.getpid()
+        
+        # Allow this process to be ptraced (required on systems with Yama LSM)
+        # This is safe as we're only allowing our own strace process to trace us
+        try:
+            import ctypes
+            import ctypes.util
+            libc = ctypes.CDLL(ctypes.util.find_library('c'))
+            PR_SET_PTRACER = 0x59616d61
+            PR_SET_PTRACER_ANY = -1
+            libc.prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0)
+        except Exception:
+            # If prctl fails, we'll try strace anyway - it might work on some systems
+            pass
+        
+        # Create temporary file for strace output
+        output_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False).name
+        
+        try:
+            # Start strace in the background
+            # -f: follow forks
+            # -e trace=...: only trace read/write syscalls
+            # -o: output to file
+            strace_cmd = [
+                'strace',
+                '-f',  # Follow forks
+                '-e', 'trace=read,write,pread64,pwrite64,readv,writev,preadv,pwritev,preadv2,pwritev2',
+                '-o', output_file,
+                '-p', str(pid)
+            ]
+            
+            # Start strace process
+            strace_proc = subprocess.Popen(
+                strace_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Give strace a moment to attach
+            time.sleep(0.5)
+            
+            # Check if strace started successfully
+            if strace_proc.poll() is not None:
+                stdout, stderr = strace_proc.communicate()
+                if 'Operation not permitted' in stderr:
+                    raise RuntimeError("strace failed - ptrace not permitted. This may be due to kernel security settings.")
+                raise RuntimeError(f"Failed to start strace: {stderr}")
+            
+            # Execute the code
+            start_time = time.time()
+            self.shell.run_cell(code)
+            elapsed_time = time.time() - start_time
+            
+            # Give strace a moment to capture final I/O
+            time.sleep(0.5)
+            
+            # Terminate strace
+            strace_proc.terminate()
+            try:
+                strace_proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                strace_proc.kill()
+                strace_proc.wait()
+            
+            # Parse the output
+            read_count = 0
+            write_count = 0
+            read_bytes = 0
+            write_bytes = 0
+            
+            if os.path.exists(output_file):
+                with open(output_file, 'r') as f:
+                    for line in f:
+                        op_type, bytes_transferred = self._parse_strace_line(line)
+                        if op_type == 'read':
+                            read_count += 1
+                            read_bytes += bytes_transferred
+                        elif op_type == 'write':
+                            write_count += 1
+                            write_bytes += bytes_transferred
+            
+            return {
+                'read_count': read_count,
+                'write_count': write_count,
+                'read_bytes': read_bytes,
+                'write_bytes': write_bytes,
+                'elapsed_time': elapsed_time,
+                'method': 'strace (per-process)'
+            }
+        
+        finally:
+            # Cleanup
+            try:
+                if os.path.exists(output_file):
+                    os.remove(output_file)
+            except:
+                pass
+    
     def _measure_systemwide_fallback(self, code):
         """Fallback: system-wide I/O measurement using psutil"""
         if not psutil:
@@ -393,7 +525,16 @@ exit 0
                         print("Falling back to system-wide measurement.\n")
                         results = self._measure_systemwide_fallback(cell)
             
-            elif self.platform in ('linux', 'linux2', 'win32'):
+            elif self.platform in ('linux', 'linux2'):
+                # Use strace on Linux (no elevated privileges required)
+                try:
+                    results = self._measure_linux_strace(cell)
+                except (RuntimeError, FileNotFoundError) as e:
+                    print(f"⚠️ Could not use strace: {e}")
+                    print("Falling back to psutil per-process measurement.\n")
+                    results = self._measure_linux_windows(cell)
+            
+            elif self.platform == 'win32':
                 results = self._measure_linux_windows(cell)
             
             else:
