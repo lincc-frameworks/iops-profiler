@@ -132,10 +132,14 @@ class IOPSProfiler(Magics):
         # Determine if it's a read or write operation based on syscall name
         # All I/O syscalls we track contain either 'read' or 'write' in their name
         # (e.g., read, pread64, readv, write, pwrite64, writev)
-        is_read = 'read' in syscall
-        is_write = 'write' in syscall
-        
-        if not (is_read or is_write):
+        # Note: No standard syscalls contain both 'read' and 'write' in their names
+        if 'read' in syscall:
+            is_read = True
+            is_write = False
+        elif 'write' in syscall:
+            is_read = False
+            is_write = True
+        else:
             return None, 0
         
         # The return value is the number of bytes transferred (or -1 on error)
@@ -380,7 +384,7 @@ exit 0
             if os.path.exists(output_file):
                 try:
                     # strace output is ASCII-compatible, but use errors='ignore' for safety
-                    # This skips any invalid UTF-8 sequences rather than replacing them
+                    # The 'ignore' mode silently skips any bytes that cannot be decoded
                     with open(output_file, 'r', errors='ignore') as f:
                         for line in f:
                             op_type, bytes_transferred = self._parse_strace_line(line)
