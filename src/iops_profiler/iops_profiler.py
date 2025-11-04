@@ -292,17 +292,20 @@ exit 0
             }
         
         finally:
-            # Cleanup
-            subprocess.run(['sudo', 'killall', '-9', 'fs_usage'], 
-                         capture_output=True, timeout=2)
+            # Cleanup - try to kill fs_usage processes
+            try:
+                subprocess.run(['sudo', 'killall', '-9', 'fs_usage'], 
+                             capture_output=True, timeout=2, check=False)
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                pass  # sudo or killall not available or timed out
             
             for filepath in [output_file, control_file, helper_script, 
                            f"{control_file}.pid", f"{output_file}.err"]:
                 try:
                     if os.path.exists(filepath):
                         os.remove(filepath)
-                except:
-                    pass
+                except (OSError, IOError):
+                    pass  # File already deleted or permission issue
     
     def _measure_linux_strace(self, code):
         """Measure IOPS on Linux using strace (no elevated privileges required)"""
