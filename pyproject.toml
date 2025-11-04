@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iops-profiler"
+version = "0.1.0"
+description = "Jupyter magic for measuring I/O operations per second"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "LINCC Frameworks"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: IPython",
+    "Framework :: Jupyter",
+]
+dependencies = [
+    "ipython",
+    "psutil",
+]
+
+[project.urls]
+Homepage = "https://github.com/lincc-frameworks/iops-profiler"
+Repository = "https://github.com/lincc-frameworks/iops-profiler"
+
+[tool.setuptools.packages.find]
+where = ["src"]
