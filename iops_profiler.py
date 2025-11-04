@@ -130,6 +130,8 @@ class IOPSProfiler(Magics):
             return None, 0
         
         # Determine if it's a read or write operation based on syscall name
+        # All I/O syscalls we track contain either 'read' or 'write' in their name
+        # (e.g., read, pread64, readv, write, pwrite64, writev)
         is_read = 'read' in syscall
         is_write = 'write' in syscall
         
@@ -308,8 +310,9 @@ exit 0
             import ctypes
             import ctypes.util
             libc = ctypes.CDLL(ctypes.util.find_library('c'))
-            # PR_SET_PTRACER = 0x59616d61 is the hex representation of 'Yama' in ASCII
-            # This is the constant for the Yama Linux Security Module
+            # PR_SET_PTRACER is a prctl constant defined in Linux kernel headers
+            # The value 0x59616d61 is the standard constant value for PR_SET_PTRACER
+            # It's related to the Yama Linux Security Module (Yama LSM)
             PR_SET_PTRACER = 0x59616d61
             PR_SET_PTRACER_ANY = -1
             libc.prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0)
@@ -375,15 +378,21 @@ exit 0
             write_bytes = 0
             
             if os.path.exists(output_file):
-                with open(output_file, 'r') as f:
-                    for line in f:
-                        op_type, bytes_transferred = self._parse_strace_line(line)
-                        if op_type == 'read':
-                            read_count += 1
-                            read_bytes += bytes_transferred
-                        elif op_type == 'write':
-                            write_count += 1
-                            write_bytes += bytes_transferred
+                try:
+                    # Use errors='replace' to handle any encoding issues in strace output
+                    with open(output_file, 'r', errors='replace') as f:
+                        for line in f:
+                            op_type, bytes_transferred = self._parse_strace_line(line)
+                            if op_type == 'read':
+                                read_count += 1
+                                read_bytes += bytes_transferred
+                            elif op_type == 'write':
+                                write_count += 1
+                                write_bytes += bytes_transferred
+                except (IOError, OSError) as e:
+                    # If we can't read the strace output, we'll just return zeros
+                    # This is better than failing completely
+                    pass
             
             return {
                 'read_count': read_count,
