@@ -42,6 +42,23 @@ The extension will display a table showing:
 - IOPS (operations per second)
 - Throughput (bytes per second)
 
+### Histogram Visualization
+
+Use the `--histogram` flag to visualize I/O operation distributions (available for `strace` and `fs_usage` measurement modes):
+
+```python
+%%iops --histogram
+# Your code here
+with open('test.txt', 'w') as f:
+    f.write('data' * 1000)
+```
+
+When enabled, two histogram charts are displayed alongside the results table:
+1. **Operation Count Distribution**: Shows the count of I/O operations bucketed by bytes-per-operation (log scale)
+2. **Total Bytes Distribution**: Shows the total bytes transferred bucketed by bytes-per-operation (log scale)
+
+Both charts display separate lines for reads, writes, and all operations combined.
+
 ## Platform Support
 
 - **Linux/Windows**: Uses `psutil` for per-process I/O tracking
@@ -52,3 +69,4 @@ The extension will display a table showing:
 - Python 3.8+
 - IPython/Jupyter
 - psutil
+- matplotlib (for histogram visualization)
