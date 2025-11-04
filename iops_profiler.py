@@ -24,6 +24,10 @@ try:
 except ImportError:
     psutil = None
 
+# Timing constants for strace attachment and capture
+STRACE_ATTACH_DELAY = 0.5  # seconds to wait for strace to attach to process
+STRACE_CAPTURE_DELAY = 0.5  # seconds to wait for strace to capture final I/O
+
 
 @magics_class
 class IOPSProfiler(Magics):
@@ -31,6 +35,8 @@ class IOPSProfiler(Magics):
     def __init__(self, shell):
         super().__init__(shell)
         self.platform = sys.platform
+        # Compile regex patterns for better performance
+        self._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
         
     def _measure_linux_windows(self, code):
         """Measure IOPS on Linux/Windows using psutil"""
@@ -97,7 +103,7 @@ class IOPSProfiler(Magics):
         """
         # Match patterns like: PID syscall(fd, ..., size) = result
         # We're interested in read, write, pread64, pwrite64 syscalls
-        match = re.match(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)', line)
+        match = self._strace_pattern.match(line)
         if not match:
             return None, 0
         
@@ -283,6 +289,8 @@ exit 0
             import ctypes
             import ctypes.util
             libc = ctypes.CDLL(ctypes.util.find_library('c'))
+            # PR_SET_PTRACER = 0x59616d61 is the hex representation of 'Yama' in ASCII
+            # This is the constant for the Yama Linux Security Module
             PR_SET_PTRACER = 0x59616d61
             PR_SET_PTRACER_ANY = -1
             libc.prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0)
@@ -315,7 +323,7 @@ exit 0
             )
             
             # Give strace a moment to attach
-            time.sleep(0.5)
+            time.sleep(STRACE_ATTACH_DELAY)
             
             # Check if strace started successfully
             if strace_proc.poll() is not None:
@@ -330,7 +338,7 @@ exit 0
             elapsed_time = time.time() - start_time
             
             # Give strace a moment to capture final I/O
-            time.sleep(0.5)
+            time.sleep(STRACE_CAPTURE_DELAY)
             
             # Terminate strace
             strace_proc.terminate()
