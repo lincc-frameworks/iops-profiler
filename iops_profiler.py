@@ -379,8 +379,9 @@ exit 0
             
             if os.path.exists(output_file):
                 try:
-                    # Use errors='replace' to handle any encoding issues in strace output
-                    with open(output_file, 'r', errors='replace') as f:
+                    # strace output is ASCII-compatible, but use errors='ignore' for safety
+                    # This skips any invalid UTF-8 sequences rather than replacing them
+                    with open(output_file, 'r', errors='ignore') as f:
                         for line in f:
                             op_type, bytes_transferred = self._parse_strace_line(line)
                             if op_type == 'read':
@@ -389,8 +390,9 @@ exit 0
                             elif op_type == 'write':
                                 write_count += 1
                                 write_bytes += bytes_transferred
-                except (IOError, OSError) as e:
-                    # If we can't read the strace output, we'll just return zeros
+                except (IOError, OSError):
+                    # If we can't read the strace output, return zeros with a note
+                    # The method field will still indicate strace was used
                     # This is better than failing completely
                     pass
             
