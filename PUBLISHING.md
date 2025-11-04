@@ -2,7 +2,28 @@
 
 This document describes how to publish `iops-profiler` to PyPI.
 
-## Prerequisites
+## Automated Publishing (Recommended)
+
+The repository includes a GitHub Actions workflow (`.github/workflows/publish-to-pypi.yml`) that automatically publishes to PyPI when a new release is created.
+
+To publish a new version:
+
+1. Update version in `pyproject.toml` and `src/iops_profiler/__init__.py`
+2. Commit and push your changes
+3. Create a new release on GitHub:
+   - Go to the repository's "Releases" page
+   - Click "Create a new release"
+   - Create a new tag (e.g., `v0.1.0`)
+   - Publish the release
+4. The GitHub Action will automatically build and publish to PyPI using trusted publishing
+
+**Note:** You must configure PyPI trusted publishing for this to work. See: https://docs.pypi.org/trusted-publishers/
+
+## Manual Publishing
+
+If you need to publish manually:
+
+### Prerequisites
 
 1. Install build tools:
 ```bash
@@ -51,12 +72,14 @@ After publishing, users can install with:
 pip install iops-profiler
 ```
 
-## Version Updates
+## Version Updates (Manual Publishing)
 
-Before releasing a new version:
+Before releasing a new version manually:
 
 1. Update version in `pyproject.toml`
 2. Update version in `src/iops_profiler/__init__.py`
 3. Create a git tag: `git tag v0.1.0`
 4. Push tags: `git push --tags`
 5. Build and publish as described above
+
+For automated publishing via GitHub Actions, simply create a release through the GitHub UI.
