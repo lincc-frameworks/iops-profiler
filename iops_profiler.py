@@ -28,6 +28,15 @@ except ImportError:
 STRACE_ATTACH_DELAY = 0.5  # seconds to wait for strace to attach to process
 STRACE_CAPTURE_DELAY = 0.5  # seconds to wait for strace to capture final I/O
 
+# I/O syscalls to trace with strace
+STRACE_IO_SYSCALLS = [
+    'read', 'write',           # Basic I/O
+    'pread64', 'pwrite64',     # Positional I/O
+    'readv', 'writev',         # Vectored I/O
+    'preadv', 'pwritev',       # Positional vectored I/O
+    'preadv2', 'pwritev2',     # Extended vectored I/O
+]
+
 
 @magics_class
 class IOPSProfiler(Magics):
@@ -36,7 +45,11 @@ class IOPSProfiler(Magics):
         super().__init__(shell)
         self.platform = sys.platform
         # Compile regex patterns for better performance
+        # Pattern matches: PID syscall(args) = result
+        # This pattern skips unfinished/resumed calls as they don't have complete results yet
         self._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
+        # Set of syscall names for I/O operations (lowercase)
+        self._io_syscalls = set(STRACE_IO_SYSCALLS)
         
     def _measure_linux_windows(self, code):
         """Measure IOPS on Linux/Windows using psutil"""
@@ -100,9 +113,11 @@ class IOPSProfiler(Magics):
         3385  write(3, "Hello World...", 1100) = 1100
         3385  read(3, "data", 4096) = 133
         3385  pread64(3, "...", 1024, 0) = 1024
+        
+        Note: Lines with <unfinished ...> or <... resumed> are not matched
+        as they don't contain complete result information in a single line.
         """
         # Match patterns like: PID syscall(fd, ..., size) = result
-        # We're interested in read, write, pread64, pwrite64 syscalls
         match = self._strace_pattern.match(line)
         if not match:
             return None, 0
@@ -110,9 +125,13 @@ class IOPSProfiler(Magics):
         pid, syscall, result = match.groups()
         syscall = syscall.lower()
         
-        # Check if it's a read or write operation
-        is_read = syscall in ('read', 'pread', 'pread64', 'readv', 'preadv', 'preadv2')
-        is_write = syscall in ('write', 'pwrite', 'pwrite64', 'writev', 'pwritev', 'pwritev2')
+        # Check if it's one of the I/O syscalls we're tracking
+        if syscall not in self._io_syscalls:
+            return None, 0
+        
+        # Determine if it's a read or write operation based on syscall name
+        is_read = 'read' in syscall
+        is_write = 'write' in syscall
         
         if not (is_read or is_write):
             return None, 0
@@ -304,12 +323,13 @@ exit 0
         try:
             # Start strace in the background
             # -f: follow forks
-            # -e trace=...: only trace read/write syscalls
+            # -e trace=...: only trace I/O syscalls
             # -o: output to file
+            syscalls_to_trace = ','.join(STRACE_IO_SYSCALLS)
             strace_cmd = [
                 'strace',
                 '-f',  # Follow forks
-                '-e', 'trace=read,write,pread64,pwrite64,readv,writev,preadv,pwritev,preadv2,pwritev2',
+                '-e', f'trace={syscalls_to_trace}',
                 '-o', output_file,
                 '-p', str(pid)
             ]
