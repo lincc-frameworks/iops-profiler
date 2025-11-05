@@ -172,6 +172,9 @@ class IOPSProfiler(Magics):
                 return result
             
             def __enter__(self):
+                # Return self to allow our wrapper methods to be used
+                # The wrapped file's __enter__ is called automatically on the underlying file
+                self.file.__enter__()
                 return self
             
             def __exit__(self, *args):
@@ -181,14 +184,33 @@ class IOPSProfiler(Magics):
                 return self
             
             def __next__(self):
+                # Let StopIteration propagate naturally
                 line = self.file.__next__()
+                # Track the operation only if successful
                 if line:
                     bytes_read = len(line) if isinstance(line, (bytes, str)) else 0
                     if bytes_read > 0:
                         operations.append({'type': 'read', 'bytes': bytes_read})
                 return line
             
+            def close(self):
+                """Close the file"""
+                return self.file.close()
+            
+            def flush(self):
+                """Flush the file buffer"""
+                return self.file.flush()
+            
+            def seek(self, offset, whence=0):
+                """Seek to a position in the file"""
+                return self.file.seek(offset, whence)
+            
+            def tell(self):
+                """Return current file position"""
+                return self.file.tell()
+            
             def __getattr__(self, name):
+                """Fallback for any other file methods"""
                 return getattr(self.file, name)
         
         def tracked_open(file, mode='r', *args, **kwargs):
@@ -204,7 +226,9 @@ class IOPSProfiler(Magics):
             builtins.open = tracked_open
             
             # Also inject into the IPython namespace to ensure it's used
-            shell_open = self.shell.user_ns.get('open', original_open)
+            # Save whether 'open' was already in the namespace
+            had_open_in_ns = 'open' in self.shell.user_ns
+            shell_open = self.shell.user_ns.get('open') if had_open_in_ns else None
             self.shell.user_ns['open'] = tracked_open
             
             # Execute the code
@@ -215,12 +239,12 @@ class IOPSProfiler(Magics):
         finally:
             # Restore original open in both places
             builtins.open = original_open
-            if 'open' in self.shell.user_ns:
-                # Restore the original value or remove if it was injected
-                if shell_open != tracked_open:
-                    self.shell.user_ns['open'] = shell_open
-                else:
-                    self.shell.user_ns.pop('open', None)
+            # Restore the IPython namespace
+            if had_open_in_ns and shell_open is not None:
+                self.shell.user_ns['open'] = shell_open
+            else:
+                # Remove 'open' from namespace if it wasn't there before
+                self.shell.user_ns.pop('open', None)
         
         # Get final I/O counters for aggregate counts
         process = psutil.Process()
