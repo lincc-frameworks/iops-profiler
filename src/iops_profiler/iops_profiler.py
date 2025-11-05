@@ -563,48 +563,60 @@ exit 0
         min_bytes = max(1, min(all_ops))
         max_bytes = max(all_ops)
         
-        # Generate bins on log scale
-        num_bins = 30
-        log_min = math.log10(min_bytes)
-        log_max = math.log10(max_bytes)
-        bin_edges = [10 ** x for x in [log_min + i * (log_max - log_min) / num_bins for i in range(num_bins + 1)]]
+        # Handle edge case where all operations have the same size
+        if min_bytes == max_bytes:
+            # Create a simple single bin
+            bin_edges = [min_bytes * 0.9, min_bytes * 1.1]
+        else:
+            # Generate bins on log scale
+            num_bins = 30
+            log_min = math.log10(min_bytes)
+            log_max = math.log10(max_bytes)
+            bin_edges = [10 ** x for x in [log_min + i * (log_max - log_min) / num_bins for i in range(num_bins + 1)]]
         
         # Create histograms
         def make_histogram(data, bins):
             """Create histogram counts for data"""
-            counts = [0] * len(bins)
+            # bins has n+1 edges, we want n bins
+            num_bins = len(bins) - 1
+            counts = [0] * num_bins
             for value in data:
-                for i in range(len(bins) - 1):
+                # Find which bin this value belongs to
+                for i in range(num_bins):
                     if bins[i] <= value < bins[i + 1]:
                         counts[i] += 1
                         break
                 else:
-                    # Value equals max bin edge
-                    if value == bins[-1]:
-                        counts[-2] += 1
-            return counts[:-1]  # Remove last empty bin
+                    # Value equals or exceeds max bin edge - put in last bin
+                    if value >= bins[-1]:
+                        counts[-1] += 1
+            return counts
         
-        read_counts = make_histogram(read_ops, bin_edges) if read_ops else [0] * (len(bin_edges) - 1)
-        write_counts = make_histogram(write_ops, bin_edges) if write_ops else [0] * (len(bin_edges) - 1)
+        num_bins = len(bin_edges) - 1
+        read_counts = make_histogram(read_ops, bin_edges) if read_ops else [0] * num_bins
+        write_counts = make_histogram(write_ops, bin_edges) if write_ops else [0] * num_bins
         all_counts = make_histogram(all_ops, bin_edges)
         
         # Calculate total bytes per bin
         def make_byte_histogram(data, bins):
             """Create histogram of total bytes for data"""
-            totals = [0] * len(bins)
+            # bins has n+1 edges, we want n bins
+            num_bins = len(bins) - 1
+            totals = [0] * num_bins
             for value in data:
-                for i in range(len(bins) - 1):
+                # Find which bin this value belongs to
+                for i in range(num_bins):
                     if bins[i] <= value < bins[i + 1]:
                         totals[i] += value
                         break
                 else:
-                    # Value equals max bin edge
-                    if value == bins[-1]:
-                        totals[-2] += value
-            return totals[:-1]  # Remove last empty bin
+                    # Value equals or exceeds max bin edge - put in last bin
+                    if value >= bins[-1]:
+                        totals[-1] += value
+            return totals
         
-        read_bytes = make_byte_histogram(read_ops, bin_edges) if read_ops else [0] * (len(bin_edges) - 1)
-        write_bytes = make_byte_histogram(write_ops, bin_edges) if write_ops else [0] * (len(bin_edges) - 1)
+        read_bytes = make_byte_histogram(read_ops, bin_edges) if read_ops else [0] * num_bins
+        write_bytes = make_byte_histogram(write_ops, bin_edges) if write_ops else [0] * num_bins
         all_bytes = make_byte_histogram(all_ops, bin_edges)
         
         # Use bin centers for x-axis
