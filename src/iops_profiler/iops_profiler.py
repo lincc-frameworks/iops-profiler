@@ -798,17 +798,22 @@ exit 0
         """
         try:
             # Parse command line arguments
-            show_histogram = '--histogram' in line
+            # For line magic, check if --histogram appears at the start
+            # For cell magic, check if --histogram is in the line parameter (not the cell)
+            show_histogram = False
+            code = None
             
             # Determine what code to execute
             if cell is None:
                 # Line magic mode - code is in the line parameter
-                # Remove the --histogram flag from the code to execute
-                if show_histogram:
-                    # Remove only the first occurrence of --histogram to avoid affecting string literals
-                    code = line.replace('--histogram', '', 1).strip()
+                # Check if line starts with --histogram flag
+                line_stripped = line.strip()
+                if line_stripped.startswith('--histogram'):
+                    show_histogram = True
+                    # Remove the --histogram prefix and any following whitespace
+                    code = line_stripped[len('--histogram'):].strip()
                 else:
-                    code = line.strip()
+                    code = line_stripped
                 
                 if not code:
                     print("❌ Error: No code provided to profile in line magic mode.")
@@ -816,6 +821,8 @@ exit 0
                     return
             else:
                 # Cell magic mode - code is in the cell parameter
+                # Check if --histogram flag is in the line parameter
+                show_histogram = '--histogram' in line
                 code = cell
             
             # Profile the code
