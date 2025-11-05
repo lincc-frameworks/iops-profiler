@@ -15,7 +15,7 @@ except ImportError:
     plt = None
     np = None
 
-from IPython.display import display, HTML
+from IPython.display import HTML, display
 
 
 def is_notebook_environment():
@@ -30,14 +30,14 @@ def is_notebook_environment():
         ipython = get_ipython()
         if ipython is None:
             return False
-        
+
         # Check the IPython kernel type
         # TerminalInteractiveShell is definitively non-graphical (plain IPython)
         # Everything else (ZMQInteractiveShell, etc.) is treated as graphical
         # This handles Jupyter notebooks, JupyterLab, Google Colab, and other
         # interactive environments with display capabilities
         ipython_type = type(ipython).__name__
-        
+
         # Return False only for TerminalInteractiveShell (plain IPython)
         # Return True for all other types (assume graphical capabilities)
         return ipython_type != 'TerminalInteractiveShell'
@@ -64,24 +64,24 @@ def generate_histograms(operations):
     if not plt or not np:
         print("⚠️ matplotlib or numpy not available. Cannot generate histograms.")
         return
-    
+
     if not operations:
         print("⚠️ No operations captured for histogram generation.")
         return
-    
+
     # Separate operations by type
     read_ops = [op['bytes'] for op in operations if op['type'] == 'read' and op['bytes'] > 0]
     write_ops = [op['bytes'] for op in operations if op['type'] == 'write' and op['bytes'] > 0]
     all_ops = [op['bytes'] for op in operations if op['bytes'] > 0]
-    
+
     if not all_ops:
         print("⚠️ No operations with non-zero bytes for histogram generation.")
         return
-    
+
     # Create log-scale bins
     min_bytes = max(1, min(all_ops))
     max_bytes = max(all_ops)
-    
+
     # Handle edge case where all operations have the same size
     if min_bytes == max_bytes:
         bin_edges = np.array([min_bytes * 0.9, min_bytes * 1.1])
@@ -89,23 +89,23 @@ def generate_histograms(operations):
         # Generate 200 bins evenly spaced in log space
         # Expand the range slightly to ensure min and max values are included
         bin_edges = np.logspace(np.log10(min_bytes * 0.99), np.log10(max_bytes * 1.01), 201)
-    
+
     # Compute histograms using numpy
     all_counts, _ = np.histogram(all_ops, bins=bin_edges)
     read_counts, _ = np.histogram(read_ops, bins=bin_edges) if read_ops else (np.zeros(len(bin_edges) - 1), bin_edges)
     write_counts, _ = np.histogram(write_ops, bins=bin_edges) if write_ops else (np.zeros(len(bin_edges) - 1), bin_edges)
-    
+
     # Compute byte sums per bin using weighted histograms
     all_bytes, _ = np.histogram(all_ops, bins=bin_edges, weights=all_ops)
     read_bytes, _ = np.histogram(read_ops, bins=bin_edges, weights=read_ops) if read_ops else (np.zeros(len(bin_edges) - 1), bin_edges)
     write_bytes, _ = np.histogram(write_ops, bins=bin_edges, weights=write_ops) if write_ops else (np.zeros(len(bin_edges) - 1), bin_edges)
-    
+
     # Compute bin centers for plotting
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    
+
     # Create figure with 2 subplots
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-    
+
     # Plot 1: Operation count histogram
     # Use different line styles to ensure visibility when lines overlap
     ax1.plot(bin_centers, all_counts, label='All Operations', linewidth=2, alpha=0.8, linestyle='-')
@@ -119,7 +119,7 @@ def generate_histograms(operations):
     ax1.set_title('I/O Operation Count Distribution')
     ax1.legend()
     ax1.grid(True, alpha=0.3)
-    
+
     # Plot 2: Total bytes histogram (with auto-scaling)
     max_bytes_in_bin = np.max(all_bytes) if len(all_bytes) > 0 else 0
     if max_bytes_in_bin < 1024:
@@ -132,7 +132,7 @@ def generate_histograms(operations):
         unit, divisor = 'GB', 1024 ** 3
     else:
         unit, divisor = 'TB', 1024 ** 4
-    
+
     # Use different line styles to ensure visibility when lines overlap
     ax2.plot(bin_centers, all_bytes / divisor, label='All Operations', linewidth=2, alpha=0.8, linestyle='-')
     if read_ops:
@@ -145,9 +145,9 @@ def generate_histograms(operations):
     ax2.set_title('I/O Total Bytes Distribution')
     ax2.legend()
     ax2.grid(True, alpha=0.3)
-    
+
     plt.tight_layout()
-    
+
     # Check if running in plain IPython vs notebook environment
     if is_notebook_environment():
         # In notebook, show the plot inline
@@ -171,7 +171,7 @@ def display_results_plain_text(results):
     total_bytes = results['read_bytes'] + results['write_bytes']
     iops = total_ops / results['elapsed_time'] if results['elapsed_time'] > 0 else 0
     throughput = total_bytes / results['elapsed_time'] if results['elapsed_time'] > 0 else 0
-    
+
     # Create a simple text-based table
     print("\n" + "=" * 70)
     print(f"IOPS Profile Results ({results['method']})")
@@ -187,7 +187,7 @@ def display_results_plain_text(results):
     print(f"{'IOPS:':<30} {iops:.2f} operations/second")
     print(f"{'Throughput:':<30} {format_bytes(throughput)}/second")
     print("=" * 70)
-    
+
     if '⚠️' in results['method']:
         print("\n⚠️  Warning: System-wide measurement includes I/O from all processes.")
         print("   Results may not accurately reflect your code's I/O activity.\n")
@@ -203,7 +203,7 @@ def display_results_html(results):
     total_bytes = results['read_bytes'] + results['write_bytes']
     iops = total_ops / results['elapsed_time'] if results['elapsed_time'] > 0 else 0
     throughput = total_bytes / results['elapsed_time'] if results['elapsed_time'] > 0 else 0
-    
+
     html = f"""
     <style>
         .iops-table {{
@@ -269,7 +269,7 @@ def display_results_html(results):
             </tr>
         </table>
     """
-    
+
     if '⚠️' in results['method']:
         html += """
         <div class="iops-warning">
@@ -277,7 +277,7 @@ def display_results_html(results):
             Results may not accurately reflect your code's I/O activity.
         </div>
         """
-    
+
     html += "</div>"
     display(HTML(html))
 

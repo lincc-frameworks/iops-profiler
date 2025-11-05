@@ -9,21 +9,22 @@ This module contains the IPython magic command integration and orchestration:
 """
 
 import sys
-from IPython.core.magic import Magics, magics_class, line_cell_magic
 
-from .collector import Collector
+from IPython.core.magic import Magics, line_cell_magic, magics_class
+
 from . import display
+from .collector import Collector
 
 
 @magics_class
 class IOPSProfiler(Magics):
-    
+
     def __init__(self, shell):
         super().__init__(shell)
         self.platform = sys.platform
         # Initialize the collector with shell context
         self.collector = Collector(shell)
-    
+
     def _profile_code(self, code, show_histogram=False):
         """
         Internal method to profile code with I/O measurements.
@@ -37,7 +38,7 @@ class IOPSProfiler(Magics):
         """
         # Determine if we should collect individual operations
         collect_ops = show_histogram
-        
+
         # Determine measurement method based on platform
         if self.platform == 'darwin':  # macOS
             try:
@@ -55,7 +56,7 @@ class IOPSProfiler(Magics):
                     results = self.collector.measure_systemwide_fallback(code)
                     if show_histogram:
                         print("⚠️ Histograms not available for system-wide measurement mode.")
-        
+
         elif self.platform in ('linux', 'linux2'):
             # Use strace on Linux (no elevated privileges required)
             try:
@@ -66,21 +67,21 @@ class IOPSProfiler(Magics):
                 results = self.collector.measure_linux_windows(code)
                 if show_histogram:
                     print("⚠️ Histograms not available for psutil measurement mode.")
-        
+
         elif self.platform == 'win32':
             results = self.collector.measure_linux_windows(code)
             if show_histogram:
                 print("⚠️ Histograms not available for psutil measurement mode on Windows.")
-        
+
         else:
             print(f"⚠️ Platform '{self.platform}' not fully supported.")
             print("Attempting system-wide measurement as fallback.\n")
             results = self.collector.measure_systemwide_fallback(code)
             if show_histogram:
                 print("⚠️ Histograms not available for system-wide measurement mode.")
-        
+
         return results
-    
+
     @line_cell_magic
     def iops(self, line, cell=None):
         """
@@ -105,7 +106,7 @@ class IOPSProfiler(Magics):
             # Parse command line arguments
             show_histogram = False
             code = None
-            
+
             # Determine what code to execute
             if cell is None:
                 # Line magic mode - code is in the line parameter
@@ -115,7 +116,7 @@ class IOPSProfiler(Magics):
                     code = line_stripped[len('--histogram'):].strip()
                 else:
                     code = line_stripped
-                
+
                 if not code:
                     print("❌ Error: No code provided to profile in line magic mode.")
                     print("   Usage: %iops [--histogram] <code>")
@@ -124,17 +125,17 @@ class IOPSProfiler(Magics):
                 # Cell magic mode - code is in the cell parameter
                 show_histogram = '--histogram' in line
                 code = cell
-            
+
             # Profile the code
             results = self._profile_code(code, show_histogram)
-            
+
             # Display results table
             display.display_results(results)
-            
+
             # Display histograms if requested and available
             if show_histogram and 'operations' in results:
                 display.generate_histograms(results['operations'])
-        
+
         except Exception as e:
             print(f"❌ Error during IOPS profiling: {e}")
             print("\nYour code was not executed. Please fix the profiling issue and try again.")
