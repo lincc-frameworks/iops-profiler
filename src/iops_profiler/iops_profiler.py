@@ -15,10 +15,8 @@ import time
 import re
 import subprocess
 import tempfile
-from pathlib import Path
 from IPython.core.magic import Magics, magics_class, cell_magic
 from IPython.display import display, HTML
-import math
 
 try:
     import psutil
@@ -332,11 +330,9 @@ class IOPSProfiler(Magics):
         # (e.g., read, pread64, readv, write, pwrite64, writev)
         # Note: No standard syscalls contain both 'read' and 'write' in their names
         if 'read' in syscall:
-            is_read = True
-            is_write = False
+            op_type = 'read'
         elif 'write' in syscall:
-            is_read = False
-            is_write = True
+            op_type = 'write'
         else:
             return None if collect_ops else (None, 0)
         
@@ -344,8 +340,6 @@ class IOPSProfiler(Magics):
         bytes_transferred = int(result)
         if bytes_transferred < 0:
             return None if collect_ops else (None, 0)
-        
-        op_type = 'read' if is_read else 'write'
         
         if collect_ops:
             return {'type': op_type, 'bytes': bytes_transferred}
