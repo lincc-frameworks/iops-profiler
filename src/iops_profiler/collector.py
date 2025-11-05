@@ -101,7 +101,9 @@ class Collector:
             else:
                 # Fallback: check if first token looks like a timestamp (HH:MM:SS format)
                 # Pattern: digits:digits:digits (optionally followed by .digits)
-                if re.match(r"^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$", parts[0]):
+                # Compile pattern for reuse within this conditional
+                simple_ts_pattern = re.compile(r"^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$")
+                if simple_ts_pattern.match(parts[0]):
                     timestamp = parts[0] if collect_ops else None
                     syscall_index = 1
 
@@ -435,7 +437,7 @@ exit 0
             strace_cmd = [
                 "strace",
                 "-f",  # Follow forks
-                "-ttt",  # Add absolute timestamps with microseconds (Unix time)
+                "-ttt",  # Add absolute timestamps as Unix epoch time with microsecond precision
                 "-e",
                 f"trace={syscalls_to_trace}",
                 "-o",

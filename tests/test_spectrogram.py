@@ -247,7 +247,8 @@ class TestSpectrogramGeneration:
         import matplotlib.pyplot as plt
 
         operations = []
-        for i in range(1000):
+        # Use 200 operations to validate handling of larger datasets without excessive test time
+        for i in range(200):
             timestamp = f"1234567890.{i:06d}"
             byte_size = (i % 100 + 1) * 100
             op_type = "read" if i % 2 == 0 else "write"

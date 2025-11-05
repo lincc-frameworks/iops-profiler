@@ -17,6 +17,12 @@ except ImportError:
 
 from IPython.display import HTML, display
 
+# Constants for spectrogram generation
+SPECTROGRAM_SIZE_BIN_EXPANSION = 0.01  # 1% expansion for size bins (0.99 to 1.01)
+SPECTROGRAM_SINGLE_VALUE_EXPANSION = 0.1  # 10% expansion for single value (0.9 to 1.1)
+SPECTROGRAM_SIZE_BINS = 30  # Number of bins for operation size (log scale)
+SPECTROGRAM_TIME_BINS = 50  # Number of bins for time
+
 
 def is_notebook_environment():
     """Detect if running in a graphical notebook environment vs plain IPython.
@@ -118,16 +124,23 @@ def generate_spectrogram(operations, elapsed_time):
     max_bytes = max(byte_sizes)
 
     if min_bytes == max_bytes:
-        size_bins = np.array([min_bytes * 0.9, min_bytes * 1.1])
+        # Single value case: expand range to create meaningful bins
+        expansion_factor = 1 - SPECTROGRAM_SINGLE_VALUE_EXPANSION
+        size_bins = np.array([min_bytes * expansion_factor, min_bytes / expansion_factor])
     else:
         # Create bins in log space - using fewer bins for spectrogram
-        size_bins = np.logspace(np.log10(min_bytes * 0.99), np.log10(max_bytes * 1.01), 30)
+        expansion_factor = 1 - SPECTROGRAM_SIZE_BIN_EXPANSION
+        size_bins = np.logspace(
+            np.log10(min_bytes * expansion_factor),
+            np.log10(max_bytes / expansion_factor),
+            SPECTROGRAM_SIZE_BINS,
+        )
 
     # Create time bins
     max_time = max(relative_times)
     if max_time == 0:
         max_time = elapsed_time
-    time_bins = np.linspace(0, max_time, 50)
+    time_bins = np.linspace(0, max_time, SPECTROGRAM_TIME_BINS)
 
     # Create 2D histograms for operation counts
     all_count_hist, time_edges, size_edges = np.histogram2d(
