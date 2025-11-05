@@ -33,6 +33,9 @@ STRACE_IO_SYSCALLS = [
     'preadv2', 'pwritev2',     # Extended vectored I/O
 ]
 
+# Regex pattern for extracting byte count from fs_usage output
+FS_USAGE_BYTE_PATTERN = r'B=0x([0-9a-fA-F]+)'
+
 
 class Collector:
     """Collector class for I/O profiling data collection.
@@ -53,7 +56,7 @@ class Collector:
         # Pattern matches: PID syscall(args) = result
         self._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
         # Pattern matches: B=0x[hex] in fs_usage output
-        self._fs_usage_byte_pattern = re.compile(r'B=0x([0-9a-fA-F]+)')
+        self._fs_usage_byte_pattern = re.compile(FS_USAGE_BYTE_PATTERN)
         # Set of syscall names for I/O operations (lowercase)
         self._io_syscalls = set(STRACE_IO_SYSCALLS)
     
@@ -84,7 +87,7 @@ class Collector:
         # Extract byte count from B=0x[hex] pattern using compiled regex
         if byte_pattern is None:
             # Fallback to inline regex if no pattern provided (for backward compatibility)
-            byte_match = re.search(r'B=0x([0-9a-fA-F]+)', line)
+            byte_match = re.search(FS_USAGE_BYTE_PATTERN, line)
         else:
             byte_match = byte_pattern.search(line)
         bytes_transferred = int(byte_match.group(1), 16) if byte_match else 0
