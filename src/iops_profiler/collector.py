@@ -33,6 +33,9 @@ STRACE_IO_SYSCALLS = [
     'preadv2', 'pwritev2',     # Extended vectored I/O
 ]
 
+# Regex pattern for extracting byte count from fs_usage output
+FS_USAGE_BYTE_PATTERN = r'B=0x([0-9a-fA-F]+)'
+
 
 class Collector:
     """Collector class for I/O profiling data collection.
@@ -52,15 +55,18 @@ class Collector:
         # Compile regex patterns for better performance
         # Pattern matches: PID syscall(args) = result
         self._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
+        # Pattern matches: B=0x[hex] in fs_usage output
+        self._fs_usage_byte_pattern = re.compile(FS_USAGE_BYTE_PATTERN)
         # Set of syscall names for I/O operations (lowercase)
         self._io_syscalls = set(STRACE_IO_SYSCALLS)
     
     @staticmethod
-    def parse_fs_usage_line(line, collect_ops=False):
-        """Parse a single fs_usage output line for I/O operations
+    def parse_fs_usage_line_static(line, byte_pattern=None, collect_ops=False):
+        """Parse a single fs_usage output line for I/O operations (static version)
         
         Args:
             line: The line to parse
+            byte_pattern: Compiled regex pattern for extracting byte count (optional)
             collect_ops: If True, return full operation info for histogram collection
         
         Returns:
@@ -78,8 +84,12 @@ class Collector:
         if not (is_read or is_write):
             return None if collect_ops else (None, 0)
         
-        # Extract byte count from B=0x[hex] pattern
-        byte_match = re.search(r'B=0x([0-9a-fA-F]+)', line)
+        # Extract byte count from B=0x[hex] pattern using compiled regex
+        if byte_pattern is None:
+            # Fallback to inline regex if no pattern provided (for backward compatibility)
+            byte_match = re.search(FS_USAGE_BYTE_PATTERN, line)
+        else:
+            byte_match = byte_pattern.search(line)
         bytes_transferred = int(byte_match.group(1), 16) if byte_match else 0
         
         op_type = 'read' if is_read else 'write'
@@ -87,6 +97,13 @@ class Collector:
         if collect_ops:
             return {'type': op_type, 'bytes': bytes_transferred}
         return op_type, bytes_transferred
+    
+    def parse_fs_usage_line(self, line, collect_ops=False):
+        """Parse a single fs_usage output line for I/O operations (instance method)
+        
+        This is a convenience wrapper that uses the instance's compiled byte pattern.
+        """
+        return self.parse_fs_usage_line_static(line, self._fs_usage_byte_pattern, collect_ops)
     
     @staticmethod
     def parse_strace_line_static(line, strace_pattern, io_syscalls, collect_ops=False):
@@ -525,7 +542,7 @@ exit 0
 
 # Module-level functions for backward compatibility with tests
 # These directly reference the static methods to avoid code duplication
-parse_fs_usage_line = Collector.parse_fs_usage_line
+parse_fs_usage_line = Collector.parse_fs_usage_line_static
 parse_strace_line = Collector.parse_strace_line_static
 
 
