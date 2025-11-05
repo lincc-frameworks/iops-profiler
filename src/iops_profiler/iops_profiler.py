@@ -779,7 +779,9 @@ exit 0
         """
         try:
             # Parse command line arguments
-            show_histogram = '--histogram' in line
+            # Split on whitespace to properly detect flags
+            args = line.strip().split()
+            show_histogram = '--histogram' in args
             
             # Determine if we should collect individual operations
             # Only collect for strace/fs_usage modes where detailed data is available
