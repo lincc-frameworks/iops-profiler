@@ -56,6 +56,141 @@ def format_bytes(bytes_val):
     return f"{bytes_val:.2f} TB"
 
 
+def generate_spectrogram(operations, elapsed_time):
+    """Generate spectrogram-like heatmaps for I/O operations over time
+
+    Args:
+        operations: List of dicts with 'type', 'bytes', and 'timestamp' keys
+        elapsed_time: Total elapsed time of the profiled code
+    """
+    if not plt or not np:
+        print("⚠️ matplotlib or numpy not available. Cannot generate spectrograms.")
+        return
+
+    if not operations:
+        print("⚠️ No operations captured for spectrogram generation.")
+        return
+
+    # Filter operations with timestamps and non-zero bytes
+    ops_with_time = [op for op in operations if "timestamp" in op and op["bytes"] > 0]
+
+    if not ops_with_time:
+        print("⚠️ No operations with timestamps for spectrogram generation.")
+        return
+
+    # Convert timestamps to relative time (seconds from start)
+    # Handle both Unix timestamp format (strace) and HH:MM:SS.ffffff format (fs_usage)
+    start_timestamp = None
+    relative_times = []
+
+    for op in ops_with_time:
+        ts_str = op["timestamp"]
+        # Check if it's Unix timestamp format (decimal number)
+        if ":" not in ts_str:
+            # Unix timestamp from strace
+            timestamp = float(ts_str)
+            if start_timestamp is None:
+                start_timestamp = timestamp
+            relative_times.append(timestamp - start_timestamp)
+        else:
+            # HH:MM:SS.ffffff format from fs_usage
+            # Parse the time format
+            parts = ts_str.split(":")
+            if len(parts) == 3:
+                hours = float(parts[0])
+                minutes = float(parts[1])
+                seconds = float(parts[2])
+                timestamp = hours * 3600 + minutes * 60 + seconds
+                if start_timestamp is None:
+                    start_timestamp = timestamp
+                relative_times.append(timestamp - start_timestamp)
+
+    # Handle case where no valid timestamps were extracted
+    if not relative_times:
+        print("⚠️ Could not parse timestamps for spectrogram generation.")
+        return
+
+    # Extract byte sizes
+    byte_sizes = [op["bytes"] for op in ops_with_time]
+
+    # Create log-scale bins for byte sizes
+    min_bytes = max(1, min(byte_sizes))
+    max_bytes = max(byte_sizes)
+
+    if min_bytes == max_bytes:
+        size_bins = np.array([min_bytes * 0.9, min_bytes * 1.1])
+    else:
+        # Create bins in log space - using fewer bins for spectrogram
+        size_bins = np.logspace(np.log10(min_bytes * 0.99), np.log10(max_bytes * 1.01), 30)
+
+    # Create time bins
+    max_time = max(relative_times)
+    if max_time == 0:
+        max_time = elapsed_time
+    time_bins = np.linspace(0, max_time, 50)
+
+    # Create 2D histograms for operation counts
+    all_count_hist, time_edges, size_edges = np.histogram2d(
+        relative_times, byte_sizes, bins=[time_bins, size_bins]
+    )
+
+    # Create 2D histograms for total bytes
+    all_bytes_hist, _, _ = np.histogram2d(
+        relative_times, byte_sizes, bins=[time_bins, size_bins], weights=byte_sizes
+    )
+
+    # Create figure with 2 subplots (operation count and total bytes)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Plot 1: Operation count spectrogram
+    # Use pcolormesh for heatmap visualization
+    time_centers = (time_edges[:-1] + time_edges[1:]) / 2
+    size_centers = (size_edges[:-1] + size_edges[1:]) / 2
+    time_mesh, size_mesh = np.meshgrid(time_centers, size_centers)
+
+    im1 = ax1.pcolormesh(time_mesh, size_mesh, all_count_hist.T, cmap="viridis", shading="auto")
+    ax1.set_yscale("log")
+    ax1.set_xlabel("Time (seconds)")
+    ax1.set_ylabel("Operation Size (bytes, log scale)")
+    ax1.set_title("I/O Operation Count Over Time")
+    plt.colorbar(im1, ax=ax1, label="Number of Operations")
+    ax1.grid(True, alpha=0.3)
+
+    # Plot 2: Total bytes spectrogram (with auto-scaling)
+    max_bytes_in_bin = np.max(all_bytes_hist) if all_bytes_hist.size > 0 else 0
+    if max_bytes_in_bin < 1024:
+        unit, divisor = "B", 1
+    elif max_bytes_in_bin < 1024**2:
+        unit, divisor = "KB", 1024
+    elif max_bytes_in_bin < 1024**3:
+        unit, divisor = "MB", 1024**2
+    elif max_bytes_in_bin < 1024**4:
+        unit, divisor = "GB", 1024**3
+    else:
+        unit, divisor = "TB", 1024**4
+
+    im2 = ax2.pcolormesh(time_mesh, size_mesh, (all_bytes_hist / divisor).T, cmap="plasma", shading="auto")
+    ax2.set_yscale("log")
+    ax2.set_xlabel("Time (seconds)")
+    ax2.set_ylabel("Operation Size (bytes, log scale)")
+    ax2.set_title("I/O Total Bytes Over Time")
+    plt.colorbar(im2, ax=ax2, label=f"Total Bytes ({unit})")
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    # Check if running in plain IPython vs notebook environment
+    if is_notebook_environment():
+        # In notebook, show the plot inline
+        plt.show()
+    else:
+        # In plain IPython, save to file
+        output_file = "iops_spectrogram.png"
+        plt.savefig(output_file, dpi=100, bbox_inches="tight")
+        plt.close(fig)
+        print(f"📊 Spectrogram saved to: {output_file}")
+
+
 def generate_histograms(operations):
     """Generate histograms for I/O operations using numpy
 

@@ -340,9 +340,9 @@ class TestCollectOpsMode:
                 operations.append(op)
 
         assert len(operations) == 3
-        assert operations[0] == {"type": "read", "bytes": 0x100}
-        assert operations[1] == {"type": "write", "bytes": 0x200}
-        assert operations[2] == {"type": "read", "bytes": 0x300}
+        assert operations[0] == {"type": "read", "bytes": 0x100, "timestamp": "12:34:56"}
+        assert operations[1] == {"type": "write", "bytes": 0x200, "timestamp": "12:34:57"}
+        assert operations[2] == {"type": "read", "bytes": 0x300, "timestamp": "12:34:58"}
 
     def test_collect_ops_filters_invalid_lines(self, profiler):
         """Test that collect_ops filters out invalid lines"""

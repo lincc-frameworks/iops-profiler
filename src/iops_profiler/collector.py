@@ -60,29 +60,52 @@ class Collector:
         # Compile regex patterns for better performance
         # Pattern matches: PID syscall(args) = result
         self._strace_pattern = re.compile(r"^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)")
+        # Pattern matches strace with timestamp: TIMESTAMP PID syscall(args) = result
+        self._strace_timestamp_pattern = re.compile(r"^\s*(\d+\.\d+)\s+(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)")
         # Pattern matches: B=0x[hex] in fs_usage output
         self._fs_usage_byte_pattern = re.compile(FS_USAGE_BYTE_PATTERN)
+        # Pattern matches fs_usage timestamp at start of line (HH:MM:SS or HH:MM:SS.ffffff format)
+        self._fs_usage_timestamp_pattern = re.compile(r"^\s*(\d{2}:\d{2}:\d{2}(?:\.\d+)?)")
         # Set of syscall names for I/O operations (lowercase)
         self._io_syscalls = set(STRACE_IO_SYSCALLS)
 
     @staticmethod
-    def parse_fs_usage_line_static(line, byte_pattern=None, collect_ops=False):
+    def parse_fs_usage_line_static(line, byte_pattern=None, collect_ops=False, timestamp_pattern=None):
         """Parse a single fs_usage output line for I/O operations (static version)
 
         Args:
             line: The line to parse
             byte_pattern: Compiled regex pattern for extracting byte count (optional)
             collect_ops: If True, return full operation info for histogram collection
+            timestamp_pattern: Compiled regex pattern for extracting timestamp (optional)
 
         Returns:
             If collect_ops is False: (op_type, bytes_transferred)
-            If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred}
+            If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred, 'timestamp': timestamp}
         """
         parts = line.split()
         if len(parts) < 2:
             return None if collect_ops else (None, 0)
 
-        syscall = parts[1].lower()
+        # Check if line starts with timestamp (HH:MM:SS.ffffff or HH:MM:SS format)
+        # Timestamp detection: if first token contains colons and matches time pattern
+        timestamp = None
+        syscall_index = 0
+        if parts[0] and ':' in parts[0]:
+            # Try to match timestamp pattern if provided
+            if timestamp_pattern:
+                ts_match = timestamp_pattern.match(line)
+                if ts_match:
+                    timestamp = ts_match.group(1)
+                    syscall_index = 1
+            else:
+                # Fallback: check if first token looks like a timestamp (HH:MM:SS format)
+                # Pattern: digits:digits:digits (optionally followed by .digits)
+                if re.match(r"^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$", parts[0]):
+                    timestamp = parts[0] if collect_ops else None
+                    syscall_index = 1
+
+        syscall = parts[syscall_index].lower()
         is_read = "read" in syscall
         is_write = "write" in syscall
 
@@ -100,7 +123,10 @@ class Collector:
         op_type = "read" if is_read else "write"
 
         if collect_ops:
-            return {"type": op_type, "bytes": bytes_transferred}
+            result = {"type": op_type, "bytes": bytes_transferred}
+            if timestamp:
+                result["timestamp"] = timestamp
+            return result
         return op_type, bytes_transferred
 
     def parse_fs_usage_line(self, line, collect_ops=False):
@@ -108,10 +134,14 @@ class Collector:
 
         This is a convenience wrapper that uses the instance's compiled byte pattern.
         """
-        return self.parse_fs_usage_line_static(line, self._fs_usage_byte_pattern, collect_ops)
+        return self.parse_fs_usage_line_static(
+            line, self._fs_usage_byte_pattern, collect_ops, self._fs_usage_timestamp_pattern
+        )
 
     @staticmethod
-    def parse_strace_line_static(line, strace_pattern, io_syscalls, collect_ops=False):
+    def parse_strace_line_static(
+        line, strace_pattern, io_syscalls, collect_ops=False, strace_timestamp_pattern=None
+    ):
         """Parse a single strace output line for I/O operations (static version)
 
         Example strace lines:
@@ -119,25 +149,40 @@ class Collector:
         3385  read(3, "data", 4096) = 133
         3385  pread64(3, "...", 1024, 0) = 1024
 
+        Example strace lines with timestamps:
+        1234567890.123456 3385  write(3, "Hello World...", 1100) = 1100
+        1234567890.123457 3385  read(3, "data", 4096) = 133
+
         Note: Lines with <unfinished ...> or <... resumed> are not matched
         as they don't contain complete result information in a single line.
 
         Args:
             line: The line to parse
-            strace_pattern: Compiled regex pattern for strace output
+            strace_pattern: Compiled regex pattern for strace output (without timestamp)
             io_syscalls: Set of I/O syscall names to track
             collect_ops: If True, return full operation info for histogram collection
+            strace_timestamp_pattern: Compiled regex pattern for strace with timestamp (optional)
 
         Returns:
             If collect_ops is False: (op_type, bytes_transferred)
-            If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred}
+            If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred, 'timestamp': timestamp}
         """
-        # Match patterns like: PID syscall(fd, ..., size) = result
-        match = strace_pattern.match(line)
-        if not match:
-            return None if collect_ops else (None, 0)
+        timestamp = None
+        match = None
 
-        pid, syscall, result = match.groups()
+        # Try to match with timestamp pattern first if provided
+        if strace_timestamp_pattern:
+            match = strace_timestamp_pattern.match(line)
+            if match:
+                timestamp, pid, syscall, result = match.groups()
+
+        # If no timestamp match, try regular pattern
+        if not match:
+            match = strace_pattern.match(line)
+            if not match:
+                return None if collect_ops else (None, 0)
+            pid, syscall, result = match.groups()
+
         syscall = syscall.lower()
 
         # Check if it's one of the I/O syscalls we're tracking
@@ -160,7 +205,10 @@ class Collector:
         op_type = "read" if is_read else "write"
 
         if collect_ops:
-            return {"type": op_type, "bytes": bytes_transferred}
+            result = {"type": op_type, "bytes": bytes_transferred}
+            if timestamp:
+                result["timestamp"] = timestamp
+            return result
         return op_type, bytes_transferred
 
     def parse_strace_line(self, line, collect_ops=False):
@@ -168,7 +216,9 @@ class Collector:
 
         This is a convenience wrapper that uses the instance's strace pattern and syscalls.
         """
-        return self.parse_strace_line_static(line, self._strace_pattern, self._io_syscalls, collect_ops)
+        return self.parse_strace_line_static(
+            line, self._strace_pattern, self._io_syscalls, collect_ops, self._strace_timestamp_pattern
+        )
 
     @staticmethod
     def _create_helper_script(pid, output_file, control_file):
@@ -385,6 +435,7 @@ exit 0
             strace_cmd = [
                 "strace",
                 "-f",  # Follow forks
+                "-ttt",  # Add absolute timestamps with microseconds (Unix time)
                 "-e",
                 f"trace={syscalls_to_trace}",
                 "-o",
