@@ -172,7 +172,6 @@ class TestEdgeCaseOperations:
     
     def test_parse_multiple_fs_usage_lines(self, profiler):
         """Test parsing multiple fs_usage lines in sequence"""
-        # Use 'read'/'write' instead of 'RdData'/'WrData' to work with current implementation
         lines = [
             "12:34:56  read  B=0x100  /file  Python",
             "12:34:57  write  B=0x200  /file  Python",
@@ -217,7 +216,6 @@ class TestEdgeCaseOperations:
     
     def test_mixed_valid_and_invalid_lines_fs_usage(self, profiler):
         """Test parsing mixed valid and invalid fs_usage lines"""
-        # Use 'read'/'write' instead of 'RdData'/'WrData' to work with current implementation
         lines = [
             "12:34:56  read  B=0x100  /file  Python",
             "not a valid line",
@@ -326,7 +324,6 @@ class TestCollectOpsMode:
     
     def test_collect_ops_fs_usage_multiple_lines(self, profiler):
         """Test collecting operations from multiple fs_usage lines"""
-        # Use 'read'/'write' instead of 'RdData'/'WrData' to work with current implementation
         lines = [
             "12:34:56  read  B=0x100  /file  Python",
             "12:34:57  write  B=0x200  /file  Python",
@@ -398,7 +395,6 @@ class TestBugDocumentation:
         
         What happens if B= has unexpected format like "0x" without digits?
         """
-        # Use 'read' instead of 'RdData' to work with current implementation
         line = "12:34:56  read  B=0x  /file  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         
