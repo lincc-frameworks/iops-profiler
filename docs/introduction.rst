@@ -8,6 +8,8 @@ What is IOPS?
 
 IOPS (Input/Output Operations Per Second) is a performance measurement used to characterize storage devices and file system operations. It tells you how many read or write operations your code can perform per second.
 
+IOPS are typically a fundamental limiting factor on HPC storage systems. This tool helps you debug performance problems where your code issues many IOPS to read relatively little data, which can significantly slow down your applications.
+
 Key Features
 ------------
 

@@ -9,7 +9,6 @@ These Jupyter notebooks demonstrate the key features of iops-profiler with pract
 
    notebooks/basic_usage
    notebooks/histogram_visualization
-   notebooks/advanced_usage
 
 Running the Notebooks
 ---------------------
@@ -24,8 +23,6 @@ You can run these notebooks in several ways:
       >> git clone https://github.com/lincc-frameworks/iops-profiler.git
       >> cd iops-profiler/docs/notebooks
       >> jupyter notebook
-
-3. **Try in Google Colab**: Upload the notebook files to Google Colab
 
 Prerequisites
 -------------
@@ -74,23 +71,6 @@ Explore the histogram feature for visualizing I/O patterns:
 **Recommended for:** Users who want to understand and optimize I/O operation distributions.
 
 **Note:** Histogram mode is available on Linux and macOS, but not Windows.
-
-Advanced Usage
-~~~~~~~~~~~~~~
-
-:doc:`notebooks/advanced_usage`
-
-Master advanced features and optimization techniques:
-
-- Profiling data science workflows (JSON, pickle, etc.)
-- Understanding and working with OS caching
-- Forcing synchronous I/O with fsync
-- Profiling multi-file operations
-- Comparing chunked writing strategies
-- Working with memory-mapped files
-- Best practices for accurate measurements
-
-**Recommended for:** Users who want to optimize I/O performance in production code.
 
 Additional Resources
 --------------------

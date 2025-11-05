@@ -53,32 +53,13 @@ This installs additional tools for testing, linting, and pre-commit hooks.
 Platform-Specific Setup
 -----------------------
 
-Linux
-~~~~~
+**Linux:** No additional setup required.
 
-No additional setup required. The extension uses ``psutil`` which works out of the box.
+**macOS:** Each time you run ``%iops`` or ``%%iops``, you will be prompted for your password (``fs_usage`` requires elevated privileges).
 
-macOS
-~~~~~
+**Windows:** No additional setup required.
 
-The extension uses the ``fs_usage`` utility on macOS, which requires elevated privileges. When you first run the magic command, you will be prompted to enter your password via a system dialog.
-
-**Important macOS Notes:**
-
-- The password prompt is handled by macOS's system security
-- You need to grant permission each time you start a new notebook session
-- The extension cannot store credentials for security reasons
-- Consider using Linux/Windows for automated workflows
-
-Windows
-~~~~~~~
-
-No additional setup required. The extension uses ``psutil`` which works with Windows I/O counters.
-
-**Windows Notes:**
-
-- Some operations may not be tracked as accurately as on Linux
-- Extremely fast operations (< 1ms) may not register separate I/O events
+For detailed platform information, see :doc:`platform_notes`.
 
 Verifying Installation
 ----------------------
@@ -112,26 +93,6 @@ Run a simple test to ensure everything works:
        f.write('Hello, IOPS!')
 
 You should see a results table with I/O metrics.
-
-Troubleshooting
----------------
-
-Common Issues
-~~~~~~~~~~~~~
-
-**"No module named 'iops_profiler'"**
-   Make sure you've installed the package and you're using the correct Python environment.
-
-**macOS: Password prompt doesn't appear**
-   Try running the cell again. If it still doesn't work, check System Preferences > Security & Privacy.
-
-**Windows: No I/O operations detected**
-   Some operations might be too fast to measure. Try profiling code with more substantial I/O.
-
-**ImportError for matplotlib/numpy**
-   Install visualization dependencies: ``pip install matplotlib numpy``
-
-For more help, see :doc:`troubleshooting` or file an issue on GitHub.
 
 Next Steps
 ----------

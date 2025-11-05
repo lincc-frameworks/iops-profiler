@@ -225,14 +225,6 @@ Profiling Takes Too Long
 2. **macOS:** Privilege elevation adds overhead. Expected behavior
 3. **Many small operations:** Tracking overhead becomes significant
 
-Reduce overhead:
-
-.. code-block:: python
-
-   # Don't use histogram mode for quick tests
-   %%iops
-   # your code
-
 Histogram Issues
 ----------------
 

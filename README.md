@@ -70,8 +70,7 @@ The extension will display a table showing:
 Check out our example notebooks for hands-on learning:
 
 - **[Basic Usage](https://iops-profiler.readthedocs.io/en/latest/notebooks/basic_usage.html)** - Learn the fundamentals of line and cell magic
-- **[Histogram Visualization](https://iops-profiler.readthedocs.io/en/latest/notebooks/histogram_visualization.html)** - Visualize I/O operation distributions  
-- **[Advanced Usage](https://iops-profiler.readthedocs.io/en/latest/notebooks/advanced_usage.html)** - Master optimization techniques
+- **[Histogram Visualization](https://iops-profiler.readthedocs.io/en/latest/notebooks/histogram_visualization.html)** - Visualize I/O operation distributions
 
 You can also find the notebook files in the [`docs/notebooks/`](docs/notebooks/) directory.
 
