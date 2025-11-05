@@ -26,7 +26,17 @@ Load the extension in your Jupyter notebook:
 %load_ext iops_profiler
 ```
 
-Then use the `%%iops` magic to profile I/O operations in a cell:
+### Line Magic Mode
+
+Use the `%iops` line magic to profile a single line of code:
+
+```python
+%iops open('test.txt', 'w').write('Hello World' * 1000)
+```
+
+### Cell Magic Mode
+
+Use the `%%iops` cell magic to profile I/O operations in an entire cell:
 
 ```python
 %%iops
@@ -46,6 +56,12 @@ The extension will display a table showing:
 
 Use the `--histogram` flag to visualize I/O operation distributions (available for `strace` and `fs_usage` measurement modes):
 
+**Line magic with histogram:**
+```python
+%iops --histogram open('test.txt', 'w').write('data' * 1000)
+```
+
+**Cell magic with histogram:**
 ```python
 %%iops --histogram
 # Your code here

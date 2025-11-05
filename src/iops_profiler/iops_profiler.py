@@ -3,6 +3,11 @@ IOPS Profiler - Jupyter Magic for measuring I/O operations per second
 
 Usage:
     %load_ext iops_profiler
+    
+    # Line magic (single line)
+    %iops open('test.txt', 'w').write('Hello World')
+    
+    # Cell magic (multiple lines)
     %%iops
     # Your code here
     with open('test.txt', 'w') as f:
@@ -16,7 +21,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from IPython.core.magic import Magics, magics_class, cell_magic
+from IPython.core.magic import Magics, magics_class, line_cell_magic
 from IPython.display import display, HTML
 import math
 
@@ -713,12 +718,74 @@ exit 0
         html += "</div>"
         display(HTML(html))
     
-    @cell_magic
-    def iops(self, line, cell):
+    def _profile_code(self, code, show_histogram=False):
         """
-        Measure I/O operations per second for the code in the cell.
+        Internal method to profile code with I/O measurements.
         
-        Usage:
+        Args:
+            code: The code string to profile
+            show_histogram: Whether to generate histograms
+        
+        Returns:
+            Dictionary with profiling results
+        """
+        # Determine if we should collect individual operations
+        # Only collect for strace/fs_usage modes where detailed data is available
+        collect_ops = show_histogram
+        
+        # Determine measurement method based on platform
+        if self.platform == 'darwin':  # macOS
+            try:
+                results = self._measure_macos_osascript(code, collect_ops=collect_ops)
+            except RuntimeError as e:
+                if 'Resource busy' in str(e):
+                    print("⚠️ ktrace is busy. Falling back to system-wide measurement.")
+                    print("Tip: Try running 'sudo killall fs_usage' and retry.\n")
+                    results = self._measure_systemwide_fallback(code)
+                    if show_histogram:
+                        print("⚠️ Histograms not available for system-wide measurement mode.")
+                else:
+                    print(f"⚠️ Could not start fs_usage: {e}")
+                    print("Falling back to system-wide measurement.\n")
+                    results = self._measure_systemwide_fallback(code)
+                    if show_histogram:
+                        print("⚠️ Histograms not available for system-wide measurement mode.")
+        
+        elif self.platform in ('linux', 'linux2'):
+            # Use strace on Linux (no elevated privileges required)
+            try:
+                results = self._measure_linux_strace(code, collect_ops=collect_ops)
+            except (RuntimeError, FileNotFoundError) as e:
+                print(f"⚠️ Could not use strace: {e}")
+                print("Falling back to psutil per-process measurement.\n")
+                results = self._measure_linux_windows(code)
+                if show_histogram:
+                    print("⚠️ Histograms not available for psutil measurement mode.")
+        
+        elif self.platform == 'win32':
+            results = self._measure_linux_windows(code)
+            if show_histogram:
+                print("⚠️ Histograms not available for psutil measurement mode on Windows.")
+        
+        else:
+            print(f"⚠️ Platform '{self.platform}' not fully supported.")
+            print("Attempting system-wide measurement as fallback.\n")
+            results = self._measure_systemwide_fallback(code)
+            if show_histogram:
+                print("⚠️ Histograms not available for system-wide measurement mode.")
+        
+        return results
+    
+    @line_cell_magic
+    def iops(self, line, cell=None):
+        """
+        Measure I/O operations per second for code.
+        
+        Line magic usage (single line):
+            %iops open('test.txt', 'w').write('data')
+            %iops --histogram open('test.txt', 'w').write('data')
+        
+        Cell magic usage (multiple lines):
             %%iops
             # Your code here
             with open('test.txt', 'w') as f:
@@ -735,50 +802,25 @@ exit 0
             args = line.strip().split()
             show_histogram = '--histogram' in args
             
-            # Determine if we should collect individual operations
-            # Only collect for strace/fs_usage modes where detailed data is available
-            collect_ops = show_histogram
-            
-            # Determine measurement method based on platform
-            if self.platform == 'darwin':  # macOS
-                try:
-                    results = self._measure_macos_osascript(cell, collect_ops=collect_ops)
-                except RuntimeError as e:
-                    if 'Resource busy' in str(e):
-                        print("⚠️ ktrace is busy. Falling back to system-wide measurement.")
-                        print("Tip: Try running 'sudo killall fs_usage' and retry.\n")
-                        results = self._measure_systemwide_fallback(cell)
-                        if show_histogram:
-                            print("⚠️ Histograms not available for system-wide measurement mode.")
-                    else:
-                        print(f"⚠️ Could not start fs_usage: {e}")
-                        print("Falling back to system-wide measurement.\n")
-                        results = self._measure_systemwide_fallback(cell)
-                        if show_histogram:
-                            print("⚠️ Histograms not available for system-wide measurement mode.")
-            
-            elif self.platform in ('linux', 'linux2'):
-                # Use strace on Linux (no elevated privileges required)
-                try:
-                    results = self._measure_linux_strace(cell, collect_ops=collect_ops)
-                except (RuntimeError, FileNotFoundError) as e:
-                    print(f"⚠️ Could not use strace: {e}")
-                    print("Falling back to psutil per-process measurement.\n")
-                    results = self._measure_linux_windows(cell)
-                    if show_histogram:
-                        print("⚠️ Histograms not available for psutil measurement mode.")
-            
-            elif self.platform == 'win32':
-                results = self._measure_linux_windows(cell)
+            # Determine what code to execute
+            if cell is None:
+                # Line magic mode - code is in the line parameter
+                # Remove the --histogram flag from the code to execute
                 if show_histogram:
-                    print("⚠️ Histograms not available for psutil measurement mode on Windows.")
-            
+                    code_parts = [arg for arg in args if arg != '--histogram']
+                    code = ' '.join(code_parts)
+                else:
+                    code = line.strip()
+                
+                if not code:
+                    print("❌ Error: No code provided to profile.")
+                    return
             else:
-                print(f"⚠️ Platform '{self.platform}' not fully supported.")
-                print("Attempting system-wide measurement as fallback.\n")
-                results = self._measure_systemwide_fallback(cell)
-                if show_histogram:
-                    print("⚠️ Histograms not available for system-wide measurement mode.")
+                # Cell magic mode - code is in the cell parameter
+                code = cell
+            
+            # Profile the code
+            results = self._profile_code(code, show_histogram)
             
             # Display results table
             self._display_results(results)
