@@ -432,10 +432,9 @@ class TestBugDocumentation:
         # so this should print a warning and return
         profiler._generate_histograms(operations)
     
-    @pytest.mark.xfail(reason="Potential bug: Very large PID might overflow or cause issues")
     def test_strace_extremely_large_pid(self, profiler):
         """
-        Test parsing strace line with extremely large PID (potential bug).
+        Test parsing strace line with extremely large PID.
         
         PIDs can be very large on some systems. This tests if parsing handles them.
         """
@@ -446,10 +445,9 @@ class TestBugDocumentation:
         assert op_type == 'read'
         assert bytes_transferred == 100
     
-    @pytest.mark.xfail(reason="Potential bug: Bytes count larger than 64-bit int might cause issues")
     def test_strace_extremely_large_byte_count(self, profiler):
         """
-        Test parsing strace line with extremely large byte count (potential bug).
+        Test parsing strace line with extremely large byte count.
         
         While unrealistic, extremely large values could cause integer overflow.
         """

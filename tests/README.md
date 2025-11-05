@@ -96,10 +96,11 @@ Integration and utility tests:
 - Zero-time handling
 
 #### Bug Documentation
-Tests marked with `@pytest.mark.xfail` document known issues or edge cases:
-- **fs_usage RdData/WrData**: Current parser doesn't recognize macOS fs_usage syscall names like "RdData" and "WrData"
-- **Large PIDs**: Very large process IDs might cause issues
-- **Extremely large byte counts**: Values larger than 64-bit int might overflow
+Tests marked with `@pytest.mark.skip` document known bugs:
+- **fs_usage RdData/WrData**: Current parser doesn't recognize macOS fs_usage syscall names like "RdData" and "WrData" (2 tests)
+
+#### Async Operation Handling
+- **test_async_write_across_two_lines**: Documents how strace async operations split across two lines are handled. The current implementation ignores both the `<unfinished ...>` and `<... resumed>` lines since neither contains complete operation information.
 
 ## Running Tests
 
@@ -118,17 +119,16 @@ Run with coverage:
 pytest tests/ --cov=iops_profiler --cov-report=html
 ```
 
-Run only passing tests (exclude xfail):
+Run skipped tests (to see failing bug tests):
 ```bash
-pytest tests/ --ignore-xfail
+pytest tests/ --run-skipped
 ```
 
 ## Test Statistics
 
-- Total tests: 112
-- Passing: 108
-- Expected failures (xfail): 2 (document bugs)
-- Unexpected passes (xpass): 2
+- Total tests: 113
+- Passing: 111
+- Skipped: 2 (document bugs)
 
 ## Key Edge Cases Tested
 
@@ -144,15 +144,16 @@ pytest tests/ --ignore-xfail
 
 ## Bugs Documented
 
-The test suite documents the following bugs (as failing tests per issue requirements):
+The test suite documents the following bug (as skipped failing tests per issue requirements):
 
 1. **fs_usage parser limitation** (`test_parsing.py`):
    - Parser looks for substring 'read' or 'write' in syscall names
    - Doesn't recognize macOS-specific syscall names like "RdData" and "WrData"
    - Tests: `test_basic_read_operation_rddata`, `test_basic_write_operation_wrdata`
-   - Status: Tests marked as xfail to document the bug
+   - Status: Tests marked as `skip` to document the bug (verified failing before marking)
 
-2. **Potential integer overflow** (`test_integration.py`):
-   - Very large PIDs or byte counts might cause issues
-   - Tests: `test_strace_extremely_large_pid`, `test_strace_extremely_large_byte_count`
-   - Status: Tests marked as xfail to document potential future issues
+## Implementation Notes
+
+1. **Async operations in strace**: When strace traces async operations, it splits them across two lines with `<unfinished ...>` and `<... resumed>` markers. The current parser ignores both lines since neither contains complete operation information in a single line. This is documented in `test_async_write_across_two_lines`.
+
+2. **Large values**: Tests for very large PIDs and byte counts pass successfully, showing the parser handles these edge cases correctly.
