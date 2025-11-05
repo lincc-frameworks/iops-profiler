@@ -556,7 +556,7 @@ exit 0
             # If it's a ZMQ shell (notebook), return True
             # If it's a Terminal shell (plain ipython), return False
             return ipython_type == 'ZMQInteractiveShell'
-        except:
+        except (ImportError, AttributeError, Exception):
             # If we can't determine, assume plain environment
             return False
     
@@ -664,6 +664,7 @@ exit 0
             plt.show()
         else:
             # In plain IPython, save to file
+            # Using fixed filename as specified - overwrites on repeated runs
             output_file = 'iops_histogram.png'
             plt.savefig(output_file, dpi=100, bbox_inches='tight')
             plt.close(fig)
