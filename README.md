@@ -61,6 +61,7 @@ Use the `--histogram` flag to visualize I/O operation distributions (available f
 %%iops --histogram
 import tempfile
 import os
+import shutil
 
 # Create test files with different sizes
 test_dir = tempfile.mkdtemp()
@@ -100,7 +101,6 @@ try:
 
 finally:
     # Cleanup
-    import shutil
     if os.path.exists(test_dir):
         shutil.rmtree(test_dir)
 ```
