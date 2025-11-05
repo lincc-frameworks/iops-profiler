@@ -9,16 +9,15 @@ Usage:
         f.write('Hello World')
 """
 
+import builtins
 import os
 import sys
 import time
 import re
 import subprocess
 import tempfile
-from pathlib import Path
 from IPython.core.magic import Magics, magics_class, cell_magic
 from IPython.display import display, HTML
-import math
 
 try:
     import psutil
@@ -59,8 +58,13 @@ class IOPSProfiler(Magics):
         # Set of syscall names for I/O operations (lowercase)
         self._io_syscalls = set(STRACE_IO_SYSCALLS)
         
-    def _measure_linux_windows(self, code):
-        """Measure IOPS on Linux/Windows using psutil"""
+    def _measure_linux_windows(self, code, collect_ops=False):
+        """Measure IOPS on Linux/Windows using psutil
+        
+        Args:
+            code: The code to profile
+            collect_ops: If True, collect individual operation sizes for histogram (Windows only)
+        """
         if not psutil:
             raise RuntimeError("psutil not installed. Run: pip install psutil")
         
@@ -71,6 +75,10 @@ class IOPSProfiler(Magics):
             io_before = process.io_counters()
         except AttributeError:
             raise RuntimeError(f"psutil.Process.io_counters() not supported on {self.platform}")
+        
+        # On Windows, use Python-level I/O tracking if granular data is requested
+        if collect_ops and self.platform == 'win32':
+            return self._measure_windows_python_io(code, io_before)
         
         # Execute the code
         start_time = time.time()
@@ -93,6 +101,188 @@ class IOPSProfiler(Magics):
             'write_bytes': write_bytes,
             'elapsed_time': elapsed_time,
             'method': 'psutil (per-process)'
+        }
+    
+    def _measure_windows_python_io(self, code, io_before):
+        """Measure IOPS on Windows with Python-level I/O tracking for granular data
+        
+        This method intercepts Python's built-in open() function to track individual
+        read and write operations at the Python level.
+        
+        Note: Only captures Python-level I/O (open/read/write), not native C extensions.
+        
+        Args:
+            code: The code to profile
+            io_before: Initial psutil I/O counters for verification
+        """
+        operations = []
+        
+        original_open = builtins.open
+        
+        class IOTracker:
+            """Wrapper to track I/O operations on file objects"""
+            def __init__(self, file_obj, mode):
+                self.file = file_obj
+                self.mode = mode
+                
+            def read(self, size=-1):
+                result = self.file.read(size)
+                if result:
+                    bytes_read = len(result) if isinstance(result, (bytes, str)) else 0
+                    if bytes_read > 0:
+                        operations.append({'type': 'read', 'bytes': bytes_read})
+                return result
+            
+            def readline(self, size=-1):
+                result = self.file.readline(size)
+                if result:
+                    bytes_read = len(result) if isinstance(result, (bytes, str)) else 0
+                    if bytes_read > 0:
+                        operations.append({'type': 'read', 'bytes': bytes_read})
+                return result
+            
+            def readlines(self, hint=-1):
+                result = self.file.readlines(hint)
+                if result:
+                    total_bytes = sum(len(line) for line in result)
+                    if total_bytes > 0:
+                        # Record as individual operations to better reflect actual I/O
+                        for line in result:
+                            if line:
+                                operations.append({'type': 'read', 'bytes': len(line)})
+                return result
+            
+            def write(self, data):
+                result = self.file.write(data)
+                bytes_written = len(data) if isinstance(data, (bytes, str)) else 0
+                if bytes_written > 0:
+                    operations.append({'type': 'write', 'bytes': bytes_written})
+                return result
+            
+            def writelines(self, lines):
+                result = self.file.writelines(lines)
+                # Record as individual operations
+                for line in lines:
+                    if line:
+                        bytes_written = len(line) if isinstance(line, (bytes, str)) else 0
+                        if bytes_written > 0:
+                            operations.append({'type': 'write', 'bytes': bytes_written})
+                return result
+            
+            def __enter__(self):
+                # Return self to allow our wrapper methods to be used
+                # The wrapped file's __enter__ is called automatically on the underlying file
+                self.file.__enter__()
+                return self
+            
+            def __exit__(self, *args):
+                return self.file.__exit__(*args)
+            
+            def __iter__(self):
+                return self
+            
+            def __next__(self):
+                # Let StopIteration propagate naturally to signal iteration end
+                line = self.file.__next__()
+                # Track the operation only if it transferred data (non-zero bytes)
+                # This is consistent with strace/fs_usage which report actual bytes transferred
+                if line:
+                    bytes_read = len(line) if isinstance(line, (bytes, str)) else 0
+                    if bytes_read > 0:
+                        operations.append({'type': 'read', 'bytes': bytes_read})
+                return line
+            
+            def close(self):
+                """Close the file"""
+                return self.file.close()
+            
+            def flush(self):
+                """Flush the file buffer"""
+                return self.file.flush()
+            
+            def seek(self, offset, whence=0):
+                """Seek to a position in the file"""
+                return self.file.seek(offset, whence)
+            
+            def tell(self):
+                """Return current file position"""
+                return self.file.tell()
+            
+            def __getattr__(self, name):
+                """Fallback for any other file methods"""
+                return getattr(self.file, name)
+        
+        def tracked_open(file, mode='r', *args, **kwargs):
+            """Wrapper for open() that tracks I/O operations"""
+            file_obj = original_open(file, mode, *args, **kwargs)
+            # Only track readable/writable files
+            if 'r' in mode or 'w' in mode or 'a' in mode or '+' in mode:
+                return IOTracker(file_obj, mode)
+            return file_obj
+        
+        try:
+            # Install the tracking wrapper in builtins
+            builtins.open = tracked_open
+            
+            # Also inject into the IPython namespace to ensure it's used
+            # Save whether 'open' was already in the namespace
+            had_open_in_ns = 'open' in self.shell.user_ns
+            shell_open = self.shell.user_ns.get('open') if had_open_in_ns else None
+            self.shell.user_ns['open'] = tracked_open
+            
+            # Execute the code
+            start_time = time.time()
+            self.shell.run_cell(code)
+            elapsed_time = time.time() - start_time
+            
+        finally:
+            # Restore original open in both places
+            builtins.open = original_open
+            # Restore the IPython namespace
+            if had_open_in_ns and shell_open is not None:
+                self.shell.user_ns['open'] = shell_open
+            else:
+                # Remove 'open' from namespace if it wasn't there before
+                self.shell.user_ns.pop('open', None)
+        
+        # Get final I/O counters for aggregate counts
+        process = psutil.Process()
+        io_after = process.io_counters()
+        
+        # Calculate aggregate differences from psutil
+        read_count = io_after.read_count - io_before.read_count
+        write_count = io_after.write_count - io_before.write_count
+        read_bytes = io_after.read_bytes - io_before.read_bytes
+        write_bytes = io_after.write_bytes - io_before.write_bytes
+        
+        # If we captured operations, use them; otherwise fall back to psutil counts
+        if operations:
+            # Count operations from our tracker
+            tracked_read_count = sum(1 for op in operations if op['type'] == 'read')
+            tracked_write_count = sum(1 for op in operations if op['type'] == 'write')
+            tracked_read_bytes = sum(op['bytes'] for op in operations if op['type'] == 'read')
+            tracked_write_bytes = sum(op['bytes'] for op in operations if op['type'] == 'write')
+            
+            # Prefer tracked counts if available, fall back to psutil
+            result_read_count = tracked_read_count if tracked_read_count > 0 else read_count
+            result_write_count = tracked_write_count if tracked_write_count > 0 else write_count
+            result_read_bytes = tracked_read_bytes if tracked_read_bytes > 0 else read_bytes
+            result_write_bytes = tracked_write_bytes if tracked_write_bytes > 0 else write_bytes
+        else:
+            # No operations tracked, use psutil counts
+            result_read_count = read_count
+            result_write_count = write_count
+            result_read_bytes = read_bytes
+            result_write_bytes = write_bytes
+        
+        return {
+            'read_count': result_read_count,
+            'write_count': result_write_count,
+            'read_bytes': result_read_bytes,
+            'write_bytes': result_write_bytes,
+            'elapsed_time': elapsed_time,
+            'method': 'Python I/O tracking (per-operation)',
+            'operations': operations
         }
     
     def _parse_fs_usage_line(self, line, collect_ops=False):
@@ -163,11 +353,9 @@ class IOPSProfiler(Magics):
         # (e.g., read, pread64, readv, write, pwrite64, writev)
         # Note: No standard syscalls contain both 'read' and 'write' in their names
         if 'read' in syscall:
-            is_read = True
-            is_write = False
+            op_type = 'read'
         elif 'write' in syscall:
-            is_read = False
-            is_write = True
+            op_type = 'write'
         else:
             return None if collect_ops else (None, 0)
         
@@ -175,8 +363,6 @@ class IOPSProfiler(Magics):
         bytes_transferred = int(result)
         if bytes_transferred < 0:
             return None if collect_ops else (None, 0)
-        
-        op_type = 'read' if is_read else 'write'
         
         if collect_ops:
             return {'type': op_type, 'bytes': bytes_transferred}
@@ -764,14 +950,12 @@ exit 0
                 except (RuntimeError, FileNotFoundError) as e:
                     print(f"⚠️ Could not use strace: {e}")
                     print("Falling back to psutil per-process measurement.\n")
-                    results = self._measure_linux_windows(cell)
+                    results = self._measure_linux_windows(cell, collect_ops=False)
                     if show_histogram:
                         print("⚠️ Histograms not available for psutil measurement mode.")
             
             elif self.platform == 'win32':
-                results = self._measure_linux_windows(cell)
-                if show_histogram:
-                    print("⚠️ Histograms not available for psutil measurement mode on Windows.")
+                results = self._measure_linux_windows(cell, collect_ops=collect_ops)
             
             else:
                 print(f"⚠️ Platform '{self.platform}' not fully supported.")
