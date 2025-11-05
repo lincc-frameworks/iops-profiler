@@ -9,6 +9,7 @@ Usage:
         f.write('Hello World')
 """
 
+import builtins
 import os
 import sys
 import time
@@ -116,9 +117,6 @@ class IOPSProfiler(Magics):
         """
         operations = []
         
-        # Import builtins to patch open()
-        import builtins
-        
         original_open = builtins.open
         
         class IOTracker:
@@ -184,9 +182,10 @@ class IOPSProfiler(Magics):
                 return self
             
             def __next__(self):
-                # Let StopIteration propagate naturally
+                # Let StopIteration propagate naturally to signal iteration end
                 line = self.file.__next__()
-                # Track the operation only if successful
+                # Track the operation only if it transferred data (non-zero bytes)
+                # This is consistent with strace/fs_usage which report actual bytes transferred
                 if line:
                     bytes_read = len(line) if isinstance(line, (bytes, str)) else 0
                     if bytes_read > 0:
