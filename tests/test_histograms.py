@@ -216,7 +216,9 @@ class TestGenerateHistograms:
         mock_ax2 = MagicMock()
         mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
         
-        profiler._generate_histograms(operations)
+        # Mock environment detection to simulate notebook environment
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            profiler._generate_histograms(operations)
         
         # Should create plots with separate read/write lines
         mock_plt.subplots.assert_called_once()
@@ -459,7 +461,9 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        # Mock environment detection to simulate notebook environment
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            profiler._display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.iops_profiler.display')
@@ -474,7 +478,9 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        # Mock environment detection to simulate notebook environment
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            profiler._display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.iops_profiler.display')
@@ -490,7 +496,9 @@ class TestDisplayResults:
         }
         
         # Should handle division by zero gracefully
-        profiler._display_results(results)
+        # Mock environment detection to simulate notebook environment
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            profiler._display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.iops_profiler.display')
@@ -505,7 +513,9 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        # Mock environment detection to simulate notebook environment
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            profiler._display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.iops_profiler.display')
@@ -520,7 +530,9 @@ class TestDisplayResults:
             'method': '⚠️ SYSTEM-WIDE (includes all processes)'
         }
         
-        profiler._display_results(results)
+        # Mock environment detection to simulate notebook environment
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            profiler._display_results(results)
         # Check that display was called
         mock_display.assert_called_once()
         # Get the HTML argument - it's an HTML object, so we need to access its data
@@ -543,7 +555,9 @@ class TestDisplayResults:
             'method': 'strace (per-process)'
         }
         
-        profiler._display_results(results)
+        # Mock environment detection to simulate notebook environment
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            profiler._display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.iops_profiler.display')
@@ -558,7 +572,9 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        # Mock environment detection to simulate notebook environment
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            profiler._display_results(results)
         mock_display.assert_called_once()
 
 
