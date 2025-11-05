@@ -48,4 +48,5 @@ Notes:
 
    Home page <self>
    API Reference <autoapi/index>
+   Spectrogram Example <notebooks/spectrogram_example>
    
