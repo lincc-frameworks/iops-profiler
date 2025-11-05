@@ -107,6 +107,12 @@ class TestGenerateHistograms:
         yield
         plt.close('all')
     
+    @pytest.fixture(autouse=True)
+    def mock_notebook_environment(self, profiler):
+        """Mock _is_notebook_environment to return True for histogram tests"""
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            yield
+    
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_empty_operations_list(self, mock_show, profiler):
         """Test histogram generation with empty operations list"""
@@ -542,6 +548,12 @@ class TestDisplayResults:
         """Create an IOPSProfiler instance with a mock shell"""
         return create_test_profiler()
     
+    @pytest.fixture(autouse=True)
+    def mock_notebook_environment(self, profiler):
+        """Mock _is_notebook_environment to return True for display tests"""
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            yield
+    
     @patch('iops_profiler.iops_profiler.display')
     def test_display_basic_results(self, mock_display, profiler):
         """Test displaying basic results"""
@@ -671,6 +683,12 @@ class TestHistogramEdgeCases:
         import matplotlib.pyplot as plt
         yield
         plt.close('all')
+    
+    @pytest.fixture(autouse=True)
+    def mock_notebook_environment(self, profiler):
+        """Mock _is_notebook_environment to return True for histogram tests"""
+        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+            yield
     
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_single_byte_minimum(self, mock_show, profiler):

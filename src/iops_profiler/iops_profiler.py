@@ -535,6 +535,33 @@ exit 0
             'method': '⚠️ SYSTEM-WIDE (includes all processes)'
         }
     
+    def _is_notebook_environment(self):
+        """Detect if running in a graphical notebook environment vs plain IPython.
+        
+        Returns:
+            bool: True if in a notebook with display capabilities, False for plain IPython
+        """
+        try:
+            # Check if we're in IPython
+            from IPython import get_ipython
+            ipython = get_ipython()
+            if ipython is None:
+                return False
+            
+            # Check the IPython kernel type
+            # TerminalInteractiveShell is definitively non-graphical (plain IPython)
+            # Everything else (ZMQInteractiveShell, etc.) is treated as graphical
+            # This handles Jupyter notebooks, JupyterLab, Google Colab, and other
+            # interactive environments with display capabilities
+            ipython_type = type(ipython).__name__
+            
+            # Return False only for TerminalInteractiveShell (plain IPython)
+            # Return True for all other types (assume graphical capabilities)
+            return ipython_type != 'TerminalInteractiveShell'
+        except (ImportError, AttributeError, Exception):
+            # If we can't determine, assume plain environment
+            return False
+    
     def _format_bytes(self, bytes_val):
         """Format bytes into human-readable string"""
         for unit in ['B', 'KB', 'MB', 'GB']:
@@ -635,10 +662,56 @@ exit 0
         ax2.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.show()
+        
+        # Check if running in plain IPython vs notebook environment
+        if self._is_notebook_environment():
+            # In notebook, show the plot inline
+            plt.show()
+        else:
+            # In plain IPython, save to file
+            # Using fixed filename as specified - overwrites on repeated runs
+            output_file = 'iops_histogram.png'
+            plt.savefig(output_file, dpi=100, bbox_inches='tight')
+            plt.close(fig)
+            print(f"📊 Histogram saved to: {output_file}")
     
-    def _display_results(self, results):
-        """Display results in a formatted table"""
+    def _display_results_plain_text(self, results):
+        """Display results in plain text format for terminal/console environments.
+        
+        Args:
+            results: Dictionary containing profiling results
+        """
+        total_ops = results['read_count'] + results['write_count']
+        total_bytes = results['read_bytes'] + results['write_bytes']
+        iops = total_ops / results['elapsed_time'] if results['elapsed_time'] > 0 else 0
+        throughput = total_bytes / results['elapsed_time'] if results['elapsed_time'] > 0 else 0
+        
+        # Create a simple text-based table
+        print("\n" + "=" * 70)
+        print(f"IOPS Profile Results ({results['method']})")
+        print("=" * 70)
+        print(f"{'Execution Time:':<30} {results['elapsed_time']:.4f} seconds")
+        print(f"{'Read Operations:':<30} {results['read_count']:,}")
+        print(f"{'Write Operations:':<30} {results['write_count']:,}")
+        print(f"{'Total Operations:':<30} {total_ops:,}")
+        print(f"{'Bytes Read:':<30} {self._format_bytes(results['read_bytes'])} ({results['read_bytes']:,} bytes)")
+        print(f"{'Bytes Written:':<30} {self._format_bytes(results['write_bytes'])} ({results['write_bytes']:,} bytes)")
+        print(f"{'Total Bytes:':<30} {self._format_bytes(total_bytes)} ({total_bytes:,} bytes)")
+        print("-" * 70)
+        print(f"{'IOPS:':<30} {iops:.2f} operations/second")
+        print(f"{'Throughput:':<30} {self._format_bytes(throughput)}/second")
+        print("=" * 70)
+        
+        if '⚠️' in results['method']:
+            print("\n⚠️  Warning: System-wide measurement includes I/O from all processes.")
+            print("   Results may not accurately reflect your code's I/O activity.\n")
+    
+    def _display_results_html(self, results):
+        """Display results in HTML format for notebook environments.
+        
+        Args:
+            results: Dictionary containing profiling results
+        """
         total_ops = results['read_count'] + results['write_count']
         total_bytes = results['read_bytes'] + results['write_bytes']
         iops = total_ops / results['elapsed_time'] if results['elapsed_time'] > 0 else 0
@@ -720,6 +793,17 @@ exit 0
         
         html += "</div>"
         display(HTML(html))
+    
+    def _display_results(self, results):
+        """Display results in appropriate format based on environment.
+        
+        Args:
+            results: Dictionary containing profiling results
+        """
+        if self._is_notebook_environment():
+            self._display_results_html(results)
+        else:
+            self._display_results_plain_text(results)
     
     def _profile_code(self, code, show_histogram=False):
         """
