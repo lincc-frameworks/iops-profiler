@@ -7,7 +7,7 @@ including various edge cases and error conditions.
 
 import pytest
 from unittest.mock import Mock, MagicMock
-from iops_profiler.iops_profiler import IOPSProfiler
+from iops_profiler.magic import IOPSProfiler
 
 
 class TestStraceLineParsing:
@@ -26,7 +26,7 @@ class TestStraceLineParsing:
         profiler.platform = sys.platform
         import re
         profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-        from iops_profiler.iops_profiler import STRACE_IO_SYSCALLS
+        from iops_profiler.collector import STRACE_IO_SYSCALLS
         profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
         return profiler
     
@@ -282,7 +282,7 @@ class TestFsUsageLineParsing:
         profiler.platform = sys.platform
         import re
         profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-        from iops_profiler.iops_profiler import STRACE_IO_SYSCALLS
+        from iops_profiler.collector import STRACE_IO_SYSCALLS
         profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
         return profiler
     
@@ -459,7 +459,7 @@ class TestParsingEdgeCases:
         profiler.platform = sys.platform
         import re
         profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-        from iops_profiler.iops_profiler import STRACE_IO_SYSCALLS
+        from iops_profiler.collector import STRACE_IO_SYSCALLS
         profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
         return profiler
     

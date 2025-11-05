@@ -7,7 +7,7 @@ This module tests higher-level integration scenarios and utility functions.
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import sys
-from iops_profiler.iops_profiler import IOPSProfiler, load_ipython_extension, unload_ipython_extension
+from iops_profiler.magic import IOPSProfiler, load_ipython_extension, unload_ipython_extension
 
 
 def create_test_profiler():
@@ -21,7 +21,7 @@ def create_test_profiler():
     profiler.platform = sys.platform
     import re
     profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-    from iops_profiler.iops_profiler import STRACE_IO_SYSCALLS
+    from iops_profiler.collector import STRACE_IO_SYSCALLS
     profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
     return profiler
 

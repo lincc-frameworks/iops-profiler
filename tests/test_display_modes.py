@@ -6,7 +6,7 @@ This module tests the environment detection and appropriate display mode selecti
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from iops_profiler.iops_profiler import IOPSProfiler
+from iops_profiler.magic import IOPSProfiler
 
 
 def create_test_profiler():
@@ -20,7 +20,7 @@ def create_test_profiler():
     profiler.platform = sys.platform
     import re
     profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-    from iops_profiler.iops_profiler import STRACE_IO_SYSCALLS
+    from iops_profiler.collector import STRACE_IO_SYSCALLS
     profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
     return profiler
 
@@ -94,7 +94,7 @@ class TestDisplayFunctions:
         captured = capsys.readouterr()
         assert 'Warning' in captured.out or '⚠️' in captured.out
     
-    @patch('iops_profiler.iops_profiler.display')
+    @patch('iops_profiler.display.display')
     def test_html_display(self, mock_display, profiler):
         """Test HTML display calls display() with HTML object"""
         results = {
@@ -141,8 +141,8 @@ class TestHistogramBehavior:
         """Create an IOPSProfiler instance with a mock shell"""
         return create_test_profiler()
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
+    @patch('iops_profiler.display.plt')
+    @patch('iops_profiler.display.np')
     def test_histogram_behavior(self, mock_np, mock_plt, profiler, capsys):
         """Test histogram saves to file in terminal and shows inline in notebook"""
         import numpy as np
@@ -164,7 +164,7 @@ class TestHistogramBehavior:
         mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
         
         # Test terminal mode - saves to file
-        with patch.object(profiler, '_is_notebook_environment', return_value=False):
+        with patch('iops_profiler.display.is_notebook_environment', return_value=False):
             profiler._generate_histograms(operations)
         
         mock_plt.savefig.assert_called_once()
@@ -177,7 +177,7 @@ class TestHistogramBehavior:
         mock_plt.reset_mock()
         
         # Test notebook mode - shows inline
-        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+        with patch('iops_profiler.display.is_notebook_environment', return_value=True):
             profiler._generate_histograms(operations)
         
         mock_plt.show.assert_called_once()
