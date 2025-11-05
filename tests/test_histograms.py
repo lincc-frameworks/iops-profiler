@@ -8,7 +8,8 @@ including various edge cases like empty data, single values, and boundary condit
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import numpy as np
-from iops_profiler.iops_profiler import IOPSProfiler
+from iops_profiler.magic import IOPSProfiler
+from iops_profiler import display
 
 
 def create_test_profiler():
@@ -17,13 +18,12 @@ def create_test_profiler():
     mock_shell.configurables = []
     profiler = IOPSProfiler.__new__(IOPSProfiler)
     profiler.shell = mock_shell
-    # Initialize the parent attributes manually to avoid traitlets
+    # Initialize the profiler attributes manually to avoid traitlets
     import sys
     profiler.platform = sys.platform
-    import re
-    profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-    from iops_profiler.iops_profiler import STRACE_IO_SYSCALLS
-    profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
+    # Initialize the collector with the mock shell
+    from iops_profiler.collector import Collector
+    profiler.collector = Collector(mock_shell)
     return profiler
 
 
@@ -37,58 +37,58 @@ class TestFormatBytes:
     
     def test_bytes_formatting(self, profiler):
         """Test formatting bytes (< 1 KB)"""
-        assert profiler._format_bytes(0) == "0.00 B"
-        assert profiler._format_bytes(1) == "1.00 B"
-        assert profiler._format_bytes(512) == "512.00 B"
-        assert profiler._format_bytes(1023) == "1023.00 B"
+        assert display.format_bytes(0) == "0.00 B"
+        assert display.format_bytes(1) == "1.00 B"
+        assert display.format_bytes(512) == "512.00 B"
+        assert display.format_bytes(1023) == "1023.00 B"
     
     def test_kilobytes_formatting(self, profiler):
         """Test formatting kilobytes"""
-        assert profiler._format_bytes(1024) == "1.00 KB"
-        assert profiler._format_bytes(1536) == "1.50 KB"
-        assert profiler._format_bytes(2048) == "2.00 KB"
-        assert profiler._format_bytes(1024 * 1023) == "1023.00 KB"
+        assert display.format_bytes(1024) == "1.00 KB"
+        assert display.format_bytes(1536) == "1.50 KB"
+        assert display.format_bytes(2048) == "2.00 KB"
+        assert display.format_bytes(1024 * 1023) == "1023.00 KB"
     
     def test_megabytes_formatting(self, profiler):
         """Test formatting megabytes"""
-        assert profiler._format_bytes(1024 * 1024) == "1.00 MB"
-        assert profiler._format_bytes(1024 * 1024 * 1.5) == "1.50 MB"
-        assert profiler._format_bytes(1024 * 1024 * 100) == "100.00 MB"
+        assert display.format_bytes(1024 * 1024) == "1.00 MB"
+        assert display.format_bytes(1024 * 1024 * 1.5) == "1.50 MB"
+        assert display.format_bytes(1024 * 1024 * 100) == "100.00 MB"
     
     def test_gigabytes_formatting(self, profiler):
         """Test formatting gigabytes"""
-        assert profiler._format_bytes(1024 * 1024 * 1024) == "1.00 GB"
-        assert profiler._format_bytes(1024 * 1024 * 1024 * 2.5) == "2.50 GB"
+        assert display.format_bytes(1024 * 1024 * 1024) == "1.00 GB"
+        assert display.format_bytes(1024 * 1024 * 1024 * 2.5) == "2.50 GB"
     
     def test_terabytes_formatting(self, profiler):
         """Test formatting terabytes"""
-        assert profiler._format_bytes(1024 * 1024 * 1024 * 1024) == "1.00 TB"
-        assert profiler._format_bytes(1024 * 1024 * 1024 * 1024 * 5.25) == "5.25 TB"
+        assert display.format_bytes(1024 * 1024 * 1024 * 1024) == "1.00 TB"
+        assert display.format_bytes(1024 * 1024 * 1024 * 1024 * 5.25) == "5.25 TB"
     
     def test_very_large_values(self, profiler):
         """Test formatting very large values (> 1 PB)"""
         # Values larger than 1024 TB should still show as TB
-        result = profiler._format_bytes(1024 * 1024 * 1024 * 1024 * 2000)
+        result = display.format_bytes(1024 * 1024 * 1024 * 1024 * 2000)
         assert "TB" in result
         assert float(result.split()[0]) > 1000
     
     def test_edge_case_boundary_values(self, profiler):
         """Test boundary values between units"""
-        assert "B" in profiler._format_bytes(1023.9)
-        assert "KB" in profiler._format_bytes(1024.1)
-        assert "KB" in profiler._format_bytes(1024 * 1023.9)
-        assert "MB" in profiler._format_bytes(1024 * 1024.1)
+        assert "B" in display.format_bytes(1023.9)
+        assert "KB" in display.format_bytes(1024.1)
+        assert "KB" in display.format_bytes(1024 * 1023.9)
+        assert "MB" in display.format_bytes(1024 * 1024.1)
     
     def test_fractional_bytes(self, profiler):
         """Test formatting fractional byte values"""
-        result = profiler._format_bytes(100.5)
+        result = display.format_bytes(100.5)
         assert result == "100.50 B"
     
     def test_negative_values(self, profiler):
         """Test formatting negative values (edge case, shouldn't happen in practice)"""
         # The function doesn't explicitly handle negative values,
         # but we should document the behavior
-        result = profiler._format_bytes(-1024)
+        result = display.format_bytes(-1024)
         assert "-" in result or result.startswith("-")
 
 
@@ -110,17 +110,17 @@ class TestGenerateHistograms:
     @pytest.fixture(autouse=True)
     def mock_notebook_environment(self, profiler):
         """Mock _is_notebook_environment to return True for histogram tests"""
-        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+        with patch('iops_profiler.display.is_notebook_environment', return_value=True):
             yield
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_empty_operations_list(self, mock_show, profiler):
         """Test histogram generation with empty operations list"""
         import matplotlib.pyplot as plt
         
         operations = []
         # Should print warning and return early
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should not be called since no plots were created
         mock_show.assert_not_called()
@@ -128,7 +128,7 @@ class TestGenerateHistograms:
         # No figures should have been created
         assert len(plt.get_fignums()) == 0
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_operations_with_all_zeros(self, mock_show, profiler):
         """Test histogram generation when all operations have zero bytes"""
         import matplotlib.pyplot as plt
@@ -139,7 +139,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 0},
         ]
         # Should print warning and return early
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should not be called since no plots were created
         mock_show.assert_not_called()
@@ -147,14 +147,14 @@ class TestGenerateHistograms:
         # No figures should have been created
         assert len(plt.get_fignums()) == 0
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_single_operation_single_value(self, mock_show, profiler):
         """Test histogram generation with single operation"""
         import matplotlib.pyplot as plt
         
         operations = [{'type': 'read', 'bytes': 1024}]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -189,7 +189,7 @@ class TestGenerateHistograms:
         assert len(lines) >= 1  # At least "All Operations" line
         
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_all_operations_same_size(self, mock_show, profiler):
         """Test histogram generation when all operations have the same byte size"""
         import matplotlib.pyplot as plt
@@ -201,7 +201,7 @@ class TestGenerateHistograms:
             {'type': 'write', 'bytes': 4096},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -226,7 +226,7 @@ class TestGenerateHistograms:
         assert sum(ydata) == 4  # 4 total operations
         
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_mixed_operations(self, mock_show, profiler):
         """Test histogram generation with mixed read and write operations"""
         import matplotlib.pyplot as plt
@@ -239,7 +239,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 512},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -271,7 +271,7 @@ class TestGenerateHistograms:
         assert sum(writes_line.get_ydata()) == 2   # 2 write operations
         
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_only_reads(self, mock_show, profiler):
         """Test histogram generation with only read operations"""
         import matplotlib.pyplot as plt
@@ -282,7 +282,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 4096},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -312,7 +312,7 @@ class TestGenerateHistograms:
         assert sum(reads_line.get_ydata()) == 3    # 3 read operations
         
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_only_writes(self, mock_show, profiler):
         """Test histogram generation with only write operations"""
         import matplotlib.pyplot as plt
@@ -323,7 +323,7 @@ class TestGenerateHistograms:
             {'type': 'write', 'bytes': 4096},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -353,7 +353,7 @@ class TestGenerateHistograms:
         assert sum(writes_line.get_ydata()) == 3   # 3 write operations
         
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_wide_range_of_byte_sizes(self, mock_show, profiler):
         """Test histogram generation with wide range of byte sizes (1 byte to 1 GB)"""
         import matplotlib.pyplot as plt
@@ -371,7 +371,7 @@ class TestGenerateHistograms:
             {'type': 'write', 'bytes': 1000000000},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -396,7 +396,7 @@ class TestGenerateHistograms:
         assert max(xdata) <= 1000000000  # At most 1 GB
         
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_many_operations(self, mock_show, profiler):
         """Test histogram generation with many operations"""
         import matplotlib.pyplot as plt
@@ -409,7 +409,7 @@ class TestGenerateHistograms:
                 'bytes': (i % 100 + 1) * 100
             })
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -436,38 +436,38 @@ class TestGenerateHistograms:
     def test_no_matplotlib_installed(self, profiler):
         """Test histogram generation when matplotlib is not available"""
         # Save original plt
-        from iops_profiler import iops_profiler
-        original_plt = iops_profiler.plt
+        from iops_profiler import display
+        original_plt = display.plt
         
         # Set plt to None
-        iops_profiler.plt = None
+        display.plt = None
         
         try:
             operations = [{'type': 'read', 'bytes': 1024}]
             # Should print warning and return early
-            profiler._generate_histograms(operations)
+            display.generate_histograms(operations)
         finally:
             # Restore original plt
-            iops_profiler.plt = original_plt
+            display.plt = original_plt
     
     def test_no_numpy_installed(self, profiler):
         """Test histogram generation when numpy is not available"""
         # Save original np
-        from iops_profiler import iops_profiler
-        original_np = iops_profiler.np
+        from iops_profiler import display
+        original_np = display.np
         
         # Set np to None
-        iops_profiler.np = None
+        display.np = None
         
         try:
             operations = [{'type': 'read', 'bytes': 1024}]
             # Should print warning and return early
-            profiler._generate_histograms(operations)
+            display.generate_histograms(operations)
         finally:
             # Restore original np
-            iops_profiler.np = original_np
+            display.np = original_np
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_mixed_zero_and_nonzero_bytes(self, mock_show, profiler):
         """Test histogram generation with mixed zero and non-zero bytes"""
         import matplotlib.pyplot as plt
@@ -480,7 +480,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 0},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -502,7 +502,7 @@ class TestGenerateHistograms:
         assert sum(writes_line.get_ydata()) == 2   # 2 write operations
         
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_very_small_bytes(self, mock_show, profiler):
         """Test histogram generation with very small byte counts (1-10 bytes)"""
         import matplotlib.pyplot as plt
@@ -515,7 +515,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 8},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -551,10 +551,10 @@ class TestDisplayResults:
     @pytest.fixture(autouse=True)
     def mock_notebook_environment(self, profiler):
         """Mock _is_notebook_environment to return True for display tests"""
-        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+        with patch('iops_profiler.display.is_notebook_environment', return_value=True):
             yield
     
-    @patch('iops_profiler.iops_profiler.display')
+    @patch('iops_profiler.display.display')
     def test_display_basic_results(self, mock_display, profiler):
         """Test displaying basic results"""
         results = {
@@ -566,10 +566,10 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
-    @patch('iops_profiler.iops_profiler.display')
+    @patch('iops_profiler.display.display')
     def test_display_zero_operations(self, mock_display, profiler):
         """Test displaying results with zero operations"""
         results = {
@@ -581,10 +581,10 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
-    @patch('iops_profiler.iops_profiler.display')
+    @patch('iops_profiler.display.display')
     def test_display_zero_time(self, mock_display, profiler):
         """Test displaying results with zero elapsed time"""
         results = {
@@ -597,10 +597,10 @@ class TestDisplayResults:
         }
         
         # Should handle division by zero gracefully
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
-    @patch('iops_profiler.iops_profiler.display')
+    @patch('iops_profiler.display.display')
     def test_display_very_small_time(self, mock_display, profiler):
         """Test displaying results with very small elapsed time"""
         results = {
@@ -612,10 +612,10 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
-    @patch('iops_profiler.iops_profiler.display')
+    @patch('iops_profiler.display.display')
     def test_display_system_wide_warning(self, mock_display, profiler):
         """Test that system-wide measurement shows warning"""
         results = {
@@ -627,7 +627,7 @@ class TestDisplayResults:
             'method': '⚠️ SYSTEM-WIDE (includes all processes)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         # Check that display was called
         mock_display.assert_called_once()
         # Get the HTML argument - it's an HTML object, so we need to access its data
@@ -638,7 +638,7 @@ class TestDisplayResults:
         # Should contain warning text
         assert 'Warning' in html_content or '⚠️' in html_content
     
-    @patch('iops_profiler.iops_profiler.display')
+    @patch('iops_profiler.display.display')
     def test_display_large_numbers(self, mock_display, profiler):
         """Test displaying results with large numbers"""
         results = {
@@ -650,10 +650,10 @@ class TestDisplayResults:
             'method': 'strace (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
-    @patch('iops_profiler.iops_profiler.display')
+    @patch('iops_profiler.display.display')
     def test_display_fractional_time(self, mock_display, profiler):
         """Test displaying results with fractional elapsed time"""
         results = {
@@ -665,7 +665,7 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
 
 
@@ -687,10 +687,10 @@ class TestHistogramEdgeCases:
     @pytest.fixture(autouse=True)
     def mock_notebook_environment(self, profiler):
         """Mock _is_notebook_environment to return True for histogram tests"""
-        with patch.object(profiler, '_is_notebook_environment', return_value=True):
+        with patch('iops_profiler.display.is_notebook_environment', return_value=True):
             yield
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_single_byte_minimum(self, mock_show, profiler):
         """Test histogram when minimum byte size is 1"""
         import matplotlib.pyplot as plt
@@ -700,7 +700,7 @@ class TestHistogramEdgeCases:
             {'type': 'write', 'bytes': 2},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -723,7 +723,7 @@ class TestHistogramEdgeCases:
         assert min(xdata) >= 0.99  # Minimum should be close to 1 byte (0.99 due to range expansion)
         
     
-    @patch('iops_profiler.iops_profiler.plt.show')
+    @patch('iops_profiler.display.plt.show')
     def test_power_of_two_sizes(self, mock_show, profiler):
         """Test histogram with power-of-two byte sizes"""
         import matplotlib.pyplot as plt
@@ -742,7 +742,7 @@ class TestHistogramEdgeCases:
             {'type': 'read', 'bytes': 1024},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()

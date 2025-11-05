@@ -7,7 +7,8 @@ This module tests higher-level integration scenarios and utility functions.
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import sys
-from iops_profiler.iops_profiler import IOPSProfiler, load_ipython_extension, unload_ipython_extension
+from iops_profiler.magic import IOPSProfiler, load_ipython_extension, unload_ipython_extension
+from iops_profiler import collector, display
 
 
 def create_test_profiler():
@@ -16,13 +17,12 @@ def create_test_profiler():
     mock_shell.configurables = []
     profiler = IOPSProfiler.__new__(IOPSProfiler)
     profiler.shell = mock_shell
-    # Initialize the parent attributes manually to avoid traitlets
+    # Initialize the profiler attributes manually to avoid traitlets
     import sys
     profiler.platform = sys.platform
-    import re
-    profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-    from iops_profiler.iops_profiler import STRACE_IO_SYSCALLS
-    profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
+    # Initialize the collector with the mock shell
+    from iops_profiler.collector import Collector
+    profiler.collector = Collector(mock_shell)
     return profiler
 
 
@@ -35,8 +35,8 @@ class TestIOPSProfilerInitialization:
         
         assert profiler.shell is not None
         assert profiler.platform == sys.platform
-        assert hasattr(profiler, '_strace_pattern')
-        assert hasattr(profiler, '_io_syscalls')
+        assert hasattr(profiler.collector, '_strace_pattern')
+        assert hasattr(profiler.collector, '_io_syscalls')
     
     def test_io_syscalls_set_populated(self):
         """Test that I/O syscalls set is properly populated"""
@@ -45,7 +45,7 @@ class TestIOPSProfilerInitialization:
         # Check that expected syscalls are in the set
         expected_syscalls = ['read', 'write', 'pread64', 'pwrite64', 'readv', 'writev']
         for syscall in expected_syscalls:
-            assert syscall in profiler._io_syscalls
+            assert syscall in profiler.collector._io_syscalls
     
     def test_strace_pattern_compilation(self):
         """Test that strace pattern is properly compiled"""
@@ -53,7 +53,7 @@ class TestIOPSProfilerInitialization:
         
         # Test pattern matching
         test_line = "3385  read(3, \"data\", 100) = 100"
-        match = profiler._strace_pattern.match(test_line)
+        match = profiler.collector._strace_pattern.match(test_line)
         assert match is not None
         assert match.groups() == ('3385', 'read', '100')
 
@@ -90,7 +90,7 @@ class TestHelperScriptCreation:
         output_file = "/tmp/test_output.txt"
         control_file = "/tmp/test_control.ctrl"
         
-        script = profiler._create_helper_script(pid, output_file, control_file)
+        script = collector.create_helper_script(pid, output_file, control_file)
         
         # Verify script contains expected elements
         assert str(pid) in script
@@ -105,7 +105,7 @@ class TestHelperScriptCreation:
         output_file = "/tmp/out.txt"
         control_file = "/tmp/ctrl.txt"
         
-        script = profiler._create_helper_script(pid, output_file, control_file)
+        script = collector.create_helper_script(pid, output_file, control_file)
         
         # Should contain cleanup logic
         assert "killall" in script
@@ -161,7 +161,7 @@ class TestEdgeCaseOperations:
         total_write_bytes = 0
         
         for line in lines:
-            op_type, bytes_transferred = profiler._parse_strace_line(line)
+            op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
             if op_type == 'read':
                 total_read_bytes += bytes_transferred
             elif op_type == 'write':
@@ -182,7 +182,7 @@ class TestEdgeCaseOperations:
         total_write_bytes = 0
         
         for line in lines:
-            op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+            op_type, bytes_transferred = collector.parse_fs_usage_line(line)
             if op_type == 'read':
                 total_read_bytes += bytes_transferred
             elif op_type == 'write':
@@ -206,7 +206,7 @@ class TestEdgeCaseOperations:
         total_bytes = 0
         
         for line in lines:
-            op_type, bytes_transferred = profiler._parse_strace_line(line)
+            op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
             if op_type:
                 valid_ops += 1
                 total_bytes += bytes_transferred
@@ -229,7 +229,7 @@ class TestEdgeCaseOperations:
         total_bytes = 0
         
         for line in lines:
-            op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+            op_type, bytes_transferred = collector.parse_fs_usage_line(line)
             if op_type:
                 valid_ops += 1
                 total_bytes += bytes_transferred
@@ -313,7 +313,7 @@ class TestCollectOpsMode:
         
         operations = []
         for line in lines:
-            op = profiler._parse_strace_line(line, collect_ops=True)
+            op = profiler.collector.parse_strace_line(line, collect_ops=True)
             if op:
                 operations.append(op)
         
@@ -332,7 +332,7 @@ class TestCollectOpsMode:
         
         operations = []
         for line in lines:
-            op = profiler._parse_fs_usage_line(line, collect_ops=True)
+            op = collector.parse_fs_usage_line(line, collect_ops=True)
             if op:
                 operations.append(op)
         
@@ -353,7 +353,7 @@ class TestCollectOpsMode:
         
         operations = []
         for line in lines:
-            op = profiler._parse_strace_line(line, collect_ops=True)
+            op = profiler.collector.parse_strace_line(line, collect_ops=True)
             if op:
                 operations.append(op)
         
@@ -383,7 +383,7 @@ class TestBugDocumentation:
         incomplete lines that should be handled gracefully.
         """
         line = "3385  read(3, \"da"  # Truncated line
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         
         # Should handle gracefully and return None/0
         assert op_type is None
@@ -396,7 +396,7 @@ class TestBugDocumentation:
         What happens if B= has unexpected format like "0x" without digits?
         """
         line = "12:34:56  read  B=0x  /file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         
         # Should handle gracefully
         assert op_type == 'read'
@@ -409,7 +409,7 @@ class TestBugDocumentation:
         While unusual, -0 might appear in some contexts.
         """
         line = "3385  read(3, \"data\", 100) = -0"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         
         # Should either parse as 0 or reject as invalid
         # Current implementation will parse as 0 (int("-0") == 0)
@@ -426,7 +426,7 @@ class TestBugDocumentation:
         
         # Should handle gracefully - current implementation filters out zero-byte ops
         # so this should print a warning and return
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
     
     def test_strace_extremely_large_pid(self, profiler):
         """
@@ -436,7 +436,7 @@ class TestBugDocumentation:
         """
         large_pid = 2**31 - 1  # Max 32-bit signed int
         line = f"{large_pid}  read(3, \"data\", 100) = 100"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         
         assert op_type == 'read'
         assert bytes_transferred == 100
@@ -449,7 +449,7 @@ class TestBugDocumentation:
         """
         huge_bytes = 2**63 - 1  # Max 64-bit signed int
         line = f"3385  write(3, \"...\", {huge_bytes}) = {huge_bytes}"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         
         assert op_type == 'write'
         assert bytes_transferred == huge_bytes

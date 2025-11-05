@@ -49,3 +49,6 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Test artifacts
+iops_histogram.png
