@@ -55,7 +55,8 @@ class Collector:
         # Set of syscall names for I/O operations (lowercase)
         self._io_syscalls = set(STRACE_IO_SYSCALLS)
     
-    def parse_fs_usage_line(self, line, collect_ops=False):
+    @staticmethod
+    def parse_fs_usage_line(line, collect_ops=False):
         """Parse a single fs_usage output line for I/O operations
         
         Args:
@@ -87,8 +88,9 @@ class Collector:
             return {'type': op_type, 'bytes': bytes_transferred}
         return op_type, bytes_transferred
     
-    def parse_strace_line(self, line, collect_ops=False):
-        """Parse a single strace output line for I/O operations
+    @staticmethod
+    def parse_strace_line_static(line, strace_pattern, io_syscalls, collect_ops=False):
+        """Parse a single strace output line for I/O operations (static version)
         
         Example strace lines:
         3385  write(3, "Hello World...", 1100) = 1100
@@ -100,6 +102,8 @@ class Collector:
         
         Args:
             line: The line to parse
+            strace_pattern: Compiled regex pattern for strace output
+            io_syscalls: Set of I/O syscall names to track
             collect_ops: If True, return full operation info for histogram collection
         
         Returns:
@@ -107,7 +111,7 @@ class Collector:
             If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred}
         """
         # Match patterns like: PID syscall(fd, ..., size) = result
-        match = self._strace_pattern.match(line)
+        match = strace_pattern.match(line)
         if not match:
             return None if collect_ops else (None, 0)
         
@@ -115,7 +119,7 @@ class Collector:
         syscall = syscall.lower()
         
         # Check if it's one of the I/O syscalls we're tracking
-        if syscall not in self._io_syscalls:
+        if syscall not in io_syscalls:
             return None if collect_ops else (None, 0)
         
         # Determine if it's a read or write operation based on syscall name
@@ -139,7 +143,15 @@ class Collector:
             return {'type': op_type, 'bytes': bytes_transferred}
         return op_type, bytes_transferred
     
-    def _create_helper_script(self, pid, output_file, control_file):
+    def parse_strace_line(self, line, collect_ops=False):
+        """Parse a single strace output line for I/O operations (instance method)
+        
+        This is a convenience wrapper that uses the instance's strace pattern and syscalls.
+        """
+        return self.parse_strace_line_static(line, self._strace_pattern, self._io_syscalls, collect_ops)
+    
+    @staticmethod
+    def _create_helper_script(pid, output_file, control_file):
         """Create a bash helper script that runs fs_usage with elevated privileges"""
         script_content = f'''#!/bin/bash
 PID={pid}
@@ -511,106 +523,10 @@ exit 0
         }
 
 
-# Keep module-level functions for backward compatibility with tests
-def parse_fs_usage_line(line, collect_ops=False):
-    """Module-level wrapper for backward compatibility"""
-    # Create a temporary collector without shell (only for parsing)
-    temp_collector = type('obj', (object,), {})()
-    temp_collector._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-    temp_collector._io_syscalls = set(STRACE_IO_SYSCALLS)
-    
-    # Call the parse method directly
-    parts = line.split()
-    if len(parts) < 2:
-        return None if collect_ops else (None, 0)
-    
-    syscall = parts[1].lower()
-    is_read = 'read' in syscall
-    is_write = 'write' in syscall
-    
-    if not (is_read or is_write):
-        return None if collect_ops else (None, 0)
-    
-    byte_match = re.search(r'B=0x([0-9a-fA-F]+)', line)
-    bytes_transferred = int(byte_match.group(1), 16) if byte_match else 0
-    
-    op_type = 'read' if is_read else 'write'
-    
-    if collect_ops:
-        return {'type': op_type, 'bytes': bytes_transferred}
-    return op_type, bytes_transferred
+# Module-level functions for backward compatibility with tests
+# These directly reference the static methods to avoid code duplication
+parse_fs_usage_line = Collector.parse_fs_usage_line
+parse_strace_line = Collector.parse_strace_line_static
 
 
-def parse_strace_line(line, strace_pattern, io_syscalls, collect_ops=False):
-    """Module-level wrapper for backward compatibility"""
-    match = strace_pattern.match(line)
-    if not match:
-        return None if collect_ops else (None, 0)
-    
-    pid, syscall, result = match.groups()
-    syscall = syscall.lower()
-    
-    if syscall not in io_syscalls:
-        return None if collect_ops else (None, 0)
-    
-    if 'read' in syscall:
-        is_read = True
-    elif 'write' in syscall:
-        is_read = False
-    else:
-        return None if collect_ops else (None, 0)
-    
-    bytes_transferred = int(result)
-    if bytes_transferred < 0:
-        return None if collect_ops else (None, 0)
-    
-    op_type = 'read' if is_read else 'write'
-    
-    if collect_ops:
-        return {'type': op_type, 'bytes': bytes_transferred}
-    return op_type, bytes_transferred
-
-
-def create_helper_script(pid, output_file, control_file):
-    """Module-level wrapper for backward compatibility with tests"""
-    script_content = f'''#!/bin/bash
-PID={pid}
-OUTPUT_FILE="{output_file}"
-CONTROL_FILE="{control_file}"
-ERROR_FILE="${{OUTPUT_FILE}}.err"
-
-# Try to clean up any existing fs_usage processes first
-killall -9 fs_usage 2>/dev/null
-sleep 0.5
-
-# Start fs_usage and capture stderr separately
-fs_usage -f filesystem -w "$PID" > "$OUTPUT_FILE" 2> "$ERROR_FILE" &
-FS_USAGE_PID=$!
-
-# Give fs_usage a moment to initialize
-sleep 1
-
-if ! kill -0 "$FS_USAGE_PID" 2>/dev/null; then
-    exit 1
-fi
-
-echo "$FS_USAGE_PID" > "${{CONTROL_FILE}}.pid"
-
-# Wait for stop signal
-while [ "$(cat "$CONTROL_FILE" 2>/dev/null)" != "STOP" ]; do
-    if ! kill -0 "$FS_USAGE_PID" 2>/dev/null; then
-        exit 1
-    fi
-    sleep 0.1
-done
-
-# Terminate fs_usage
-kill -TERM "$FS_USAGE_PID" 2>/dev/null
-sleep 0.5
-if kill -0 "$FS_USAGE_PID" 2>/dev/null; then
-    kill -9 "$FS_USAGE_PID" 2>/dev/null
-fi
-
-exit 0
-'''
-    return script_content
+create_helper_script = Collector._create_helper_script
