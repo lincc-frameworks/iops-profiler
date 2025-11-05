@@ -70,3 +70,4 @@ Both charts display separate lines for reads, writes, and all operations combine
 - IPython/Jupyter
 - psutil
 - matplotlib (for histogram visualization)
+- numpy (for histogram visualization)

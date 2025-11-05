@@ -27,8 +27,10 @@ except ImportError:
 
 try:
     import matplotlib.pyplot as plt
+    import numpy as np
 except ImportError:
     plt = None
+    np = None
 
 # Timing constants for strace attachment and capture
 STRACE_ATTACH_DELAY = 0.5  # seconds to wait for strace to attach to process
@@ -537,13 +539,13 @@ exit 0
         return f"{bytes_val:.2f} TB"
     
     def _generate_histograms(self, operations):
-        """Generate histograms for I/O operations
+        """Generate histograms for I/O operations using numpy
         
         Args:
             operations: List of dicts with 'type' and 'bytes' keys
         """
-        if not plt:
-            print("⚠️ matplotlib not available. Cannot generate histograms.")
+        if not plt or not np:
+            print("⚠️ matplotlib or numpy not available. Cannot generate histograms.")
             return
         
         if not operations:
@@ -565,63 +567,23 @@ exit 0
         
         # Handle edge case where all operations have the same size
         if min_bytes == max_bytes:
-            # Create a simple single bin
-            bin_edges = [min_bytes * 0.9, min_bytes * 1.1]
+            bin_edges = np.array([min_bytes * 0.9, min_bytes * 1.1])
         else:
-            # Generate bins on log scale
-            num_bins = 30
-            log_min = math.log10(min_bytes)
-            log_max = math.log10(max_bytes)
-            # Create evenly spaced bins in log space
-            log_step = (log_max - log_min) / num_bins
-            bin_edges = [10 ** (log_min + i * log_step) for i in range(num_bins + 1)]
+            # Generate 30 bins evenly spaced in log space
+            bin_edges = np.logspace(np.log10(min_bytes), np.log10(max_bytes), 31)
         
-        # Create histograms using a unified binning function
-        def bin_data(data, bins, aggregate_fn):
-            """Bin data into histogram bins
-            
-            Args:
-                data: List of values to bin
-                bins: List of bin edges (n+1 edges for n bins)
-                aggregate_fn: Function to aggregate values (e.g., count or sum)
-            
-            Returns:
-                List of aggregated values for each bin
-            """
-            num_bins = len(bins) - 1
-            results = [0] * num_bins
-            
-            for value in data:
-                # Find which bin this value belongs to
-                placed = False
-                for i in range(num_bins - 1):
-                    if bins[i] <= value < bins[i + 1]:
-                        results[i] = aggregate_fn(results[i], value)
-                        placed = True
-                        break
-                
-                # Handle last bin (includes right edge)
-                if not placed and bins[-2] <= value <= bins[-1]:
-                    results[-1] = aggregate_fn(results[-1], value)
-            
-            return results
+        # Compute histograms using numpy
+        all_counts, _ = np.histogram(all_ops, bins=bin_edges)
+        read_counts, _ = np.histogram(read_ops, bins=bin_edges) if read_ops else (np.zeros(len(bin_edges) - 1), bin_edges)
+        write_counts, _ = np.histogram(write_ops, bins=bin_edges) if write_ops else (np.zeros(len(bin_edges) - 1), bin_edges)
         
-        num_bins = len(bin_edges) - 1
+        # Compute byte sums per bin using weighted histograms
+        all_bytes, _ = np.histogram(all_ops, bins=bin_edges, weights=all_ops)
+        read_bytes, _ = np.histogram(read_ops, bins=bin_edges, weights=read_ops) if read_ops else (np.zeros(len(bin_edges) - 1), bin_edges)
+        write_bytes, _ = np.histogram(write_ops, bins=bin_edges, weights=write_ops) if write_ops else (np.zeros(len(bin_edges) - 1), bin_edges)
         
-        # Count histograms
-        count_fn = lambda acc, val: acc + 1
-        read_counts = bin_data(read_ops, bin_edges, count_fn) if read_ops else [0] * num_bins
-        write_counts = bin_data(write_ops, bin_edges, count_fn) if write_ops else [0] * num_bins
-        all_counts = bin_data(all_ops, bin_edges, count_fn)
-        
-        # Byte sum histograms
-        sum_fn = lambda acc, val: acc + val
-        read_bytes = bin_data(read_ops, bin_edges, sum_fn) if read_ops else [0] * num_bins
-        write_bytes = bin_data(write_ops, bin_edges, sum_fn) if write_ops else [0] * num_bins
-        all_bytes = bin_data(all_ops, bin_edges, sum_fn)
-        
-        # Use bin centers for x-axis
-        bin_centers = [(bin_edges[i] + bin_edges[i + 1]) / 2 for i in range(len(bin_edges) - 1)]
+        # Compute bin centers for plotting
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
         
         # Create figure with 2 subplots
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
@@ -640,33 +602,23 @@ exit 0
         ax1.grid(True, alpha=0.3)
         
         # Plot 2: Total bytes histogram (with auto-scaling)
-        # Determine best unit for y-axis
-        max_bytes_in_bin = max(all_bytes) if all_bytes else 0
+        max_bytes_in_bin = np.max(all_bytes) if len(all_bytes) > 0 else 0
         if max_bytes_in_bin < 1024:
-            unit = 'B'
-            divisor = 1
+            unit, divisor = 'B', 1
         elif max_bytes_in_bin < 1024 ** 2:
-            unit = 'KB'
-            divisor = 1024
+            unit, divisor = 'KB', 1024
         elif max_bytes_in_bin < 1024 ** 3:
-            unit = 'MB'
-            divisor = 1024 ** 2
+            unit, divisor = 'MB', 1024 ** 2
         elif max_bytes_in_bin < 1024 ** 4:
-            unit = 'GB'
-            divisor = 1024 ** 3
+            unit, divisor = 'GB', 1024 ** 3
         else:
-            unit = 'TB'
-            divisor = 1024 ** 4
+            unit, divisor = 'TB', 1024 ** 4
         
-        all_bytes_scaled = [b / divisor for b in all_bytes]
-        read_bytes_scaled = [b / divisor for b in read_bytes]
-        write_bytes_scaled = [b / divisor for b in write_bytes]
-        
-        ax2.plot(bin_centers, all_bytes_scaled, label='All Operations', linewidth=2, alpha=0.8)
+        ax2.plot(bin_centers, all_bytes / divisor, label='All Operations', linewidth=2, alpha=0.8)
         if read_ops:
-            ax2.plot(bin_centers, read_bytes_scaled, label='Reads', linewidth=2, alpha=0.8)
+            ax2.plot(bin_centers, read_bytes / divisor, label='Reads', linewidth=2, alpha=0.8)
         if write_ops:
-            ax2.plot(bin_centers, write_bytes_scaled, label='Writes', linewidth=2, alpha=0.8)
+            ax2.plot(bin_centers, write_bytes / divisor, label='Writes', linewidth=2, alpha=0.8)
         ax2.set_xscale('log')
         ax2.set_xlabel('Bytes per Operation (log scale)')
         ax2.set_ylabel(f'Total Bytes ({unit})')
