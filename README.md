@@ -44,7 +44,7 @@ The extension will display a table showing:
 
 ### Histogram Visualization
 
-Use the `--histogram` flag to visualize I/O operation distributions (available for `strace` and `fs_usage` measurement modes):
+Use the `--histogram` flag to visualize I/O operation distributions:
 
 ```python
 %%iops --histogram
@@ -61,8 +61,14 @@ Both charts display separate lines for reads, writes, and all operations combine
 
 ## Platform Support
 
-- **Linux/Windows**: Uses `psutil` for per-process I/O tracking
+- **Linux**: Uses `strace` for detailed per-operation tracking (fallback to `psutil` if `strace` unavailable)
+  - With `strace`: Captures all system-level I/O operations
+  - With `psutil`: Provides aggregate counts only (no histogram support)
 - **macOS**: Uses `fs_usage` with privilege elevation (requires password prompt)
+  - Captures all system-level I/O operations
+- **Windows**: Uses Python-level I/O tracking for granular data
+  - Captures Python `open()`/`read()`/`write()` operations
+  - **Note**: May not capture I/O from native C extensions or libraries
 
 ## Requirements
 
