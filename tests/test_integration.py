@@ -8,7 +8,6 @@ import sys
 from unittest.mock import MagicMock, Mock
 
 import pytest
-
 from iops_profiler import collector, display
 from iops_profiler.magic import IOPSProfiler, load_ipython_extension, unload_ipython_extension
 

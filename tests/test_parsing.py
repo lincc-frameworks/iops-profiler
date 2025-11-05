@@ -8,7 +8,6 @@ including various edge cases and error conditions.
 from unittest.mock import MagicMock
 
 import pytest
-
 from iops_profiler import collector
 from iops_profiler.magic import IOPSProfiler
 
@@ -267,9 +266,9 @@ class TestStraceLineParsing:
         assert read_count == 2, f"Expected 2 reads, got {read_count}"
         assert write_count == 1, f"Expected 1 write (async not counted), got {write_count}"
         assert total_read_bytes == 1024 + 512, f"Expected 1536 read bytes, got {total_read_bytes}"
-        assert total_write_bytes == 256, (
-            f"Expected 256 write bytes (async not counted), got {total_write_bytes}"
-        )
+        assert (
+            total_write_bytes == 256
+        ), f"Expected 256 write bytes (async not counted), got {total_write_bytes}"
 
 
 class TestFsUsageLineParsing:

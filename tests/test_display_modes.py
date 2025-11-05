@@ -7,7 +7,6 @@ This module tests the environment detection and appropriate display mode selecti
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from iops_profiler import display
 from iops_profiler.magic import IOPSProfiler
 

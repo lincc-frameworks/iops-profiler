@@ -173,7 +173,7 @@ class Collector:
     @staticmethod
     def _create_helper_script(pid, output_file, control_file):
         """Create a bash helper script that runs fs_usage with elevated privileges"""
-        script_content = f'''#!/bin/bash
+        script_content = f"""#!/bin/bash
 PID={pid}
 OUTPUT_FILE="{output_file}"
 CONTROL_FILE="{control_file}"
@@ -212,7 +212,7 @@ if kill -0 "$FS_USAGE_PID" 2>/dev/null; then
 fi
 
 exit 0
-'''
+"""
         return script_content
 
     def _launch_helper_via_osascript(self, helper_script_path):
@@ -491,9 +491,7 @@ exit 0
         try:
             io_before = process.io_counters()
         except AttributeError as e:
-            raise RuntimeError(
-                f"psutil.Process.io_counters() not supported on {self.platform}"
-            ) from e  # noqa: B904
+            raise RuntimeError(f"psutil.Process.io_counters() not supported on {self.platform}") from e  # noqa: B904
 
         # Execute the code
         start_time = time.time()
