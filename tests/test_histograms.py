@@ -100,33 +100,32 @@ class TestGenerateHistograms:
         """Create an IOPSProfiler instance with a mock shell"""
         return create_test_profiler()
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_empty_operations_list(self, mock_np, mock_plt, profiler):
+    @pytest.fixture(autouse=True)
+    def close_figures(self):
+        """Automatically close all matplotlib figures after each test"""
+        import matplotlib.pyplot as plt
+        yield
+        plt.close('all')
+    
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_empty_operations_list(self, mock_show, profiler):
         """Test histogram generation with empty operations list"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = []
         # Should print warning and return early
         profiler._generate_histograms(operations)
-        # plt.subplots should not be called
-        mock_plt.subplots.assert_not_called()
+        
+        # plt.show should not be called since no plots were created
+        mock_show.assert_not_called()
+        
+        # No figures should have been created
+        assert len(plt.get_fignums()) == 0
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_operations_with_all_zeros(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_operations_with_all_zeros(self, mock_show, profiler):
         """Test histogram generation when all operations have zero bytes"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'read', 'bytes': 0},
@@ -135,43 +134,59 @@ class TestGenerateHistograms:
         ]
         # Should print warning and return early
         profiler._generate_histograms(operations)
-        # plt.subplots should not be called
-        mock_plt.subplots.assert_not_called()
+        
+        # plt.show should not be called since no plots were created
+        mock_show.assert_not_called()
+        
+        # No figures should have been created
+        assert len(plt.get_fignums()) == 0
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_single_operation_single_value(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_single_operation_single_value(self, mock_show, profiler):
         """Test histogram generation with single operation"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [{'type': 'read', 'bytes': 1024}]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should create plots with adjusted bin edges
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        # Get the figure and axes
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2  # Two subplots
+        
+        # Check first subplot (operation count)
+        ax1 = axes[0]
+        assert ax1.get_xscale() == 'log'
+        assert 'Count of Operations' in ax1.get_ylabel()
+        assert 'Bytes per Operation' in ax1.get_xlabel()
+        
+        # Check that lines were plotted
+        lines = ax1.get_lines()
+        assert len(lines) >= 1  # At least "All Operations" line
+        
+        # Check second subplot (total bytes)
+        ax2 = axes[1]
+        assert ax2.get_xscale() == 'log'
+        assert 'Total Bytes' in ax2.get_ylabel()
+        assert 'Bytes per Operation' in ax2.get_xlabel()
+        
+        # Check that lines were plotted
+        lines = ax2.get_lines()
+        assert len(lines) >= 1  # At least "All Operations" line
+        
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_all_operations_same_size(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_all_operations_same_size(self, mock_show, profiler):
         """Test histogram generation when all operations have the same byte size"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'read', 'bytes': 4096},
@@ -180,27 +195,35 @@ class TestGenerateHistograms:
             {'type': 'write', 'bytes': 4096},
         ]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should handle edge case where min == max
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Verify that both axes have data plotted
+        ax1 = axes[0]
+        lines = ax1.get_lines()
+        assert len(lines) >= 3  # All, Reads, Writes
+        
+        # Verify the data contains correct counts
+        # All operations line should show 4 operations total
+        all_ops_line = [line for line in lines if line.get_label() == 'All Operations'][0]
+        ydata = all_ops_line.get_ydata()
+        assert sum(ydata) == 4  # 4 total operations
+        
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_mixed_operations(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_mixed_operations(self, mock_show, profiler):
         """Test histogram generation with mixed read and write operations"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'read', 'bytes': 1024},
@@ -210,29 +233,42 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 512},
         ]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should create plots with separate read/write lines
-        mock_plt.subplots.assert_called_once()
-        mock_plt.tight_layout.assert_called_once()
-        mock_plt.show.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Check first subplot has three lines (All, Reads, Writes)
+        ax1 = axes[0]
+        lines = ax1.get_lines()
+        assert len(lines) == 3
+        labels = [line.get_label() for line in lines]
+        assert 'All Operations' in labels
+        assert 'Reads' in labels
+        assert 'Writes' in labels
+        
+        # Verify correct operation counts
+        all_ops_line = [line for line in lines if line.get_label() == 'All Operations'][0]
+        reads_line = [line for line in lines if line.get_label() == 'Reads'][0]
+        writes_line = [line for line in lines if line.get_label() == 'Writes'][0]
+        
+        assert sum(all_ops_line.get_ydata()) == 5  # 5 total operations
+        assert sum(reads_line.get_ydata()) == 3    # 3 read operations
+        assert sum(writes_line.get_ydata()) == 2   # 2 write operations
+        
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_only_reads(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_only_reads(self, mock_show, profiler):
         """Test histogram generation with only read operations"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'read', 'bytes': 1024},
@@ -240,27 +276,40 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 4096},
         ]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should create plots with only read line
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Check first subplot has two lines (All, Reads only)
+        ax1 = axes[0]
+        lines = ax1.get_lines()
+        assert len(lines) == 2
+        labels = [line.get_label() for line in lines]
+        assert 'All Operations' in labels
+        assert 'Reads' in labels
+        assert 'Writes' not in labels  # No writes should be present
+        
+        # Verify correct operation counts
+        all_ops_line = [line for line in lines if line.get_label() == 'All Operations'][0]
+        reads_line = [line for line in lines if line.get_label() == 'Reads'][0]
+        
+        assert sum(all_ops_line.get_ydata()) == 3  # 3 total operations
+        assert sum(reads_line.get_ydata()) == 3    # 3 read operations
+        
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_only_writes(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_only_writes(self, mock_show, profiler):
         """Test histogram generation with only write operations"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'write', 'bytes': 1024},
@@ -268,27 +317,40 @@ class TestGenerateHistograms:
             {'type': 'write', 'bytes': 4096},
         ]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should create plots with only write line
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Check first subplot has two lines (All, Writes only)
+        ax1 = axes[0]
+        lines = ax1.get_lines()
+        assert len(lines) == 2
+        labels = [line.get_label() for line in lines]
+        assert 'All Operations' in labels
+        assert 'Writes' in labels
+        assert 'Reads' not in labels  # No reads should be present
+        
+        # Verify correct operation counts
+        all_ops_line = [line for line in lines if line.get_label() == 'All Operations'][0]
+        writes_line = [line for line in lines if line.get_label() == 'Writes'][0]
+        
+        assert sum(all_ops_line.get_ydata()) == 3  # 3 total operations
+        assert sum(writes_line.get_ydata()) == 3   # 3 write operations
+        
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_wide_range_of_byte_sizes(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_wide_range_of_byte_sizes(self, mock_show, profiler):
         """Test histogram generation with wide range of byte sizes (1 byte to 1 GB)"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'read', 'bytes': 1},
@@ -303,27 +365,35 @@ class TestGenerateHistograms:
             {'type': 'write', 'bytes': 1000000000},
         ]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should create plots with log scale
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Both axes should have log scale on x-axis
+        ax1, ax2 = axes
+        assert ax1.get_xscale() == 'log'
+        assert ax2.get_xscale() == 'log'
+        
+        # Verify the data spans a wide range
+        all_ops_line = [line for line in ax1.get_lines() if line.get_label() == 'All Operations'][0]
+        xdata = all_ops_line.get_xdata()
+        assert min(xdata) >= 1  # At least 1 byte
+        assert max(xdata) <= 1000000000  # At most 1 GB
+        
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_many_operations(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_many_operations(self, mock_show, profiler):
         """Test histogram generation with many operations"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         # Generate 10000 operations
         operations = []
@@ -333,16 +403,29 @@ class TestGenerateHistograms:
                 'bytes': (i % 100 + 1) * 100
             })
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should handle large datasets efficiently
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Verify correct operation counts
+        ax1 = axes[0]
+        all_ops_line = [line for line in ax1.get_lines() if line.get_label() == 'All Operations'][0]
+        reads_line = [line for line in ax1.get_lines() if line.get_label() == 'Reads'][0]
+        writes_line = [line for line in ax1.get_lines() if line.get_label() == 'Writes'][0]
+        
+        assert sum(all_ops_line.get_ydata()) == 10000  # 10000 total operations
+        assert sum(reads_line.get_ydata()) == 5000     # 5000 read operations
+        assert sum(writes_line.get_ydata()) == 5000    # 5000 write operations
+        
     
     def test_no_matplotlib_installed(self, profiler):
         """Test histogram generation when matplotlib is not available"""
@@ -378,16 +461,10 @@ class TestGenerateHistograms:
             # Restore original np
             iops_profiler.np = original_np
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_mixed_zero_and_nonzero_bytes(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_mixed_zero_and_nonzero_bytes(self, mock_show, profiler):
         """Test histogram generation with mixed zero and non-zero bytes"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'read', 'bytes': 0},
@@ -397,27 +474,32 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 0},
         ]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should filter out zero-byte operations
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Should only count non-zero byte operations (2 writes)
+        ax1 = axes[0]
+        all_ops_line = [line for line in ax1.get_lines() if line.get_label() == 'All Operations'][0]
+        writes_line = [line for line in ax1.get_lines() if line.get_label() == 'Writes'][0]
+        
+        assert sum(all_ops_line.get_ydata()) == 2  # Only 2 non-zero operations
+        assert sum(writes_line.get_ydata()) == 2   # 2 write operations
+        
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_very_small_bytes(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_very_small_bytes(self, mock_show, profiler):
         """Test histogram generation with very small byte counts (1-10 bytes)"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'read', 'bytes': 1},
@@ -427,16 +509,29 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 8},
         ]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should handle small values correctly
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Verify correct operation counts for small values
+        ax1 = axes[0]
+        all_ops_line = [line for line in ax1.get_lines() if line.get_label() == 'All Operations'][0]
+        reads_line = [line for line in ax1.get_lines() if line.get_label() == 'Reads'][0]
+        writes_line = [line for line in ax1.get_lines() if line.get_label() == 'Writes'][0]
+        
+        assert sum(all_ops_line.get_ydata()) == 5  # 5 total operations
+        assert sum(reads_line.get_ydata()) == 3    # 3 read operations
+        assert sum(writes_line.get_ydata()) == 2   # 2 write operations
+        
 
 
 class TestDisplayResults:
@@ -570,43 +665,50 @@ class TestHistogramEdgeCases:
         """Create an IOPSProfiler instance with a mock shell"""
         return create_test_profiler()
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_single_byte_minimum(self, mock_np, mock_plt, profiler):
+    @pytest.fixture(autouse=True)
+    def close_figures(self):
+        """Automatically close all matplotlib figures after each test"""
+        import matplotlib.pyplot as plt
+        yield
+        plt.close('all')
+    
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_single_byte_minimum(self, mock_show, profiler):
         """Test histogram when minimum byte size is 1"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'read', 'bytes': 1},
             {'type': 'write', 'bytes': 2},
         ]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should handle minimum value of 1 correctly
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Verify correct operation counts
+        ax1 = axes[0]
+        all_ops_line = [line for line in ax1.get_lines() if line.get_label() == 'All Operations'][0]
+        assert sum(all_ops_line.get_ydata()) == 2  # 2 total operations
+        
+        # Verify x-axis data includes small values
+        xdata = all_ops_line.get_xdata()
+        assert min(xdata) >= 1  # Minimum should be at least 1 byte
+        
     
-    @patch('iops_profiler.iops_profiler.plt')
-    @patch('iops_profiler.iops_profiler.np')
-    def test_power_of_two_sizes(self, mock_np, mock_plt, profiler):
+    @patch('iops_profiler.iops_profiler.plt.show')
+    def test_power_of_two_sizes(self, mock_show, profiler):
         """Test histogram with power-of-two byte sizes"""
-        mock_np.histogram = np.histogram
-        mock_np.logspace = np.logspace
-        mock_np.log10 = np.log10
-        mock_np.array = np.array
-        mock_np.zeros = np.zeros
-        mock_np.max = np.max
+        import matplotlib.pyplot as plt
         
         operations = [
             {'type': 'read', 'bytes': 1},
@@ -622,13 +724,26 @@ class TestHistogramEdgeCases:
             {'type': 'read', 'bytes': 1024},
         ]
         
-        # Mock pyplot components
-        mock_fig = MagicMock()
-        mock_ax1 = MagicMock()
-        mock_ax2 = MagicMock()
-        mock_plt.subplots.return_value = (mock_fig, (mock_ax1, mock_ax2))
-        
         profiler._generate_histograms(operations)
         
-        # Should create proper bins for power-of-two sizes
-        mock_plt.subplots.assert_called_once()
+        # plt.show should be called once
+        mock_show.assert_called_once()
+        
+        # Should create one figure with two subplots
+        figs = plt.get_fignums()
+        assert len(figs) == 1
+        
+        fig = plt.figure(figs[0])
+        axes = fig.get_axes()
+        assert len(axes) == 2
+        
+        # Verify correct operation counts
+        ax1 = axes[0]
+        all_ops_line = [line for line in ax1.get_lines() if line.get_label() == 'All Operations'][0]
+        reads_line = [line for line in ax1.get_lines() if line.get_label() == 'Reads'][0]
+        writes_line = [line for line in ax1.get_lines() if line.get_label() == 'Writes'][0]
+        
+        assert sum(all_ops_line.get_ydata()) == 11  # 11 total operations
+        assert sum(reads_line.get_ydata()) == 6     # 6 read operations
+        assert sum(writes_line.get_ydata()) == 5    # 5 write operations
+        

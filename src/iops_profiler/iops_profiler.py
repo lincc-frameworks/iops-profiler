@@ -575,7 +575,8 @@ exit 0
             bin_edges = np.array([min_bytes * 0.9, min_bytes * 1.1])
         else:
             # Generate 30 bins evenly spaced in log space
-            bin_edges = np.logspace(np.log10(min_bytes), np.log10(max_bytes), 31)
+            # Expand the range slightly to ensure min and max values are included
+            bin_edges = np.logspace(np.log10(min_bytes * 0.99), np.log10(max_bytes * 1.01), 31)
         
         # Compute histograms using numpy
         all_counts, _ = np.histogram(all_ops, bins=bin_edges)
