@@ -572,52 +572,53 @@ exit 0
             num_bins = 30
             log_min = math.log10(min_bytes)
             log_max = math.log10(max_bytes)
-            bin_edges = [10 ** x for x in [log_min + i * (log_max - log_min) / num_bins for i in range(num_bins + 1)]]
+            # Create evenly spaced bins in log space
+            log_step = (log_max - log_min) / num_bins
+            bin_edges = [10 ** (log_min + i * log_step) for i in range(num_bins + 1)]
         
-        # Create histograms
-        def make_histogram(data, bins):
-            """Create histogram counts for data"""
-            # bins has n+1 edges, we want n bins
+        # Create histograms using a unified binning function
+        def bin_data(data, bins, aggregate_fn):
+            """Bin data into histogram bins
+            
+            Args:
+                data: List of values to bin
+                bins: List of bin edges (n+1 edges for n bins)
+                aggregate_fn: Function to aggregate values (e.g., count or sum)
+            
+            Returns:
+                List of aggregated values for each bin
+            """
             num_bins = len(bins) - 1
-            counts = [0] * num_bins
+            results = [0] * num_bins
+            
             for value in data:
                 # Find which bin this value belongs to
-                for i in range(num_bins):
+                placed = False
+                for i in range(num_bins - 1):
                     if bins[i] <= value < bins[i + 1]:
-                        counts[i] += 1
+                        results[i] = aggregate_fn(results[i], value)
+                        placed = True
                         break
-                else:
-                    # Value equals or exceeds max bin edge - put in last bin
-                    if value >= bins[-1]:
-                        counts[-1] += 1
-            return counts
+                
+                # Handle last bin (includes right edge)
+                if not placed and bins[-2] <= value <= bins[-1]:
+                    results[-1] = aggregate_fn(results[-1], value)
+            
+            return results
         
         num_bins = len(bin_edges) - 1
-        read_counts = make_histogram(read_ops, bin_edges) if read_ops else [0] * num_bins
-        write_counts = make_histogram(write_ops, bin_edges) if write_ops else [0] * num_bins
-        all_counts = make_histogram(all_ops, bin_edges)
         
-        # Calculate total bytes per bin
-        def make_byte_histogram(data, bins):
-            """Create histogram of total bytes for data"""
-            # bins has n+1 edges, we want n bins
-            num_bins = len(bins) - 1
-            totals = [0] * num_bins
-            for value in data:
-                # Find which bin this value belongs to
-                for i in range(num_bins):
-                    if bins[i] <= value < bins[i + 1]:
-                        totals[i] += value
-                        break
-                else:
-                    # Value equals or exceeds max bin edge - put in last bin
-                    if value >= bins[-1]:
-                        totals[-1] += value
-            return totals
+        # Count histograms
+        count_fn = lambda acc, val: acc + 1
+        read_counts = bin_data(read_ops, bin_edges, count_fn) if read_ops else [0] * num_bins
+        write_counts = bin_data(write_ops, bin_edges, count_fn) if write_ops else [0] * num_bins
+        all_counts = bin_data(all_ops, bin_edges, count_fn)
         
-        read_bytes = make_byte_histogram(read_ops, bin_edges) if read_ops else [0] * num_bins
-        write_bytes = make_byte_histogram(write_ops, bin_edges) if write_ops else [0] * num_bins
-        all_bytes = make_byte_histogram(all_ops, bin_edges)
+        # Byte sum histograms
+        sum_fn = lambda acc, val: acc + val
+        read_bytes = bin_data(read_ops, bin_edges, sum_fn) if read_ops else [0] * num_bins
+        write_bytes = bin_data(write_ops, bin_edges, sum_fn) if write_ops else [0] * num_bins
+        all_bytes = bin_data(all_ops, bin_edges, sum_fn)
         
         # Use bin centers for x-axis
         bin_centers = [(bin_edges[i] + bin_edges[i + 1]) / 2 for i in range(len(bin_edges) - 1)]
@@ -640,7 +641,7 @@ exit 0
         
         # Plot 2: Total bytes histogram (with auto-scaling)
         # Determine best unit for y-axis
-        max_bytes_in_bin = max(all_bytes)
+        max_bytes_in_bin = max(all_bytes) if all_bytes else 0
         if max_bytes_in_bin < 1024:
             unit = 'B'
             divisor = 1
