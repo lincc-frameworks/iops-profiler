@@ -601,9 +601,9 @@ exit 0
         if min_bytes == max_bytes:
             bin_edges = np.array([min_bytes * 0.9, min_bytes * 1.1])
         else:
-            # Generate 30 bins evenly spaced in log space
+            # Generate 200 bins evenly spaced in log space
             # Expand the range slightly to ensure min and max values are included
-            bin_edges = np.logspace(np.log10(min_bytes * 0.99), np.log10(max_bytes * 1.01), 31)
+            bin_edges = np.logspace(np.log10(min_bytes * 0.99), np.log10(max_bytes * 1.01), 201)
         
         # Compute histograms using numpy
         all_counts, _ = np.histogram(all_ops, bins=bin_edges)
@@ -622,11 +622,12 @@ exit 0
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
         
         # Plot 1: Operation count histogram
-        ax1.plot(bin_centers, all_counts, label='All Operations', linewidth=2, alpha=0.8)
+        # Use different line styles to ensure visibility when lines overlap
+        ax1.plot(bin_centers, all_counts, label='All Operations', linewidth=2, alpha=0.8, linestyle='-')
         if read_ops:
-            ax1.plot(bin_centers, read_counts, label='Reads', linewidth=2, alpha=0.8)
+            ax1.plot(bin_centers, read_counts, label='Reads', linewidth=2, alpha=0.8, linestyle='--')
         if write_ops:
-            ax1.plot(bin_centers, write_counts, label='Writes', linewidth=2, alpha=0.8)
+            ax1.plot(bin_centers, write_counts, label='Writes', linewidth=2, alpha=0.8, linestyle=':')
         ax1.set_xscale('log')
         ax1.set_xlabel('Bytes per Operation (log scale)')
         ax1.set_ylabel('Count of Operations')
@@ -647,11 +648,12 @@ exit 0
         else:
             unit, divisor = 'TB', 1024 ** 4
         
-        ax2.plot(bin_centers, all_bytes / divisor, label='All Operations', linewidth=2, alpha=0.8)
+        # Use different line styles to ensure visibility when lines overlap
+        ax2.plot(bin_centers, all_bytes / divisor, label='All Operations', linewidth=2, alpha=0.8, linestyle='-')
         if read_ops:
-            ax2.plot(bin_centers, read_bytes / divisor, label='Reads', linewidth=2, alpha=0.8)
+            ax2.plot(bin_centers, read_bytes / divisor, label='Reads', linewidth=2, alpha=0.8, linestyle='--')
         if write_ops:
-            ax2.plot(bin_centers, write_bytes / divisor, label='Writes', linewidth=2, alpha=0.8)
+            ax2.plot(bin_centers, write_bytes / divisor, label='Writes', linewidth=2, alpha=0.8, linestyle=':')
         ax2.set_xscale('log')
         ax2.set_xlabel('Bytes per Operation (log scale)')
         ax2.set_ylabel(f'Total Bytes ({unit})')

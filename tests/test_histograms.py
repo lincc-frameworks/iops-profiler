@@ -720,7 +720,7 @@ class TestHistogramEdgeCases:
         
         # Verify x-axis data includes small values
         xdata = all_ops_line.get_xdata()
-        assert min(xdata) >= 1  # Minimum should be at least 1 byte
+        assert min(xdata) >= 0.99  # Minimum should be close to 1 byte (0.99 due to range expansion)
         
     
     @patch('iops_profiler.iops_profiler.plt.show')
