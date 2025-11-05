@@ -27,6 +27,7 @@ version = ".".join(release.split(".")[:2])
 extensions = ["sphinx.ext.mathjax", "sphinx.ext.napoleon", "sphinx.ext.viewcode"]
 
 extensions.append("autoapi.extension")
+extensions.append("nbsphinx")
 
 # -- sphinx-copybutton configuration ----------------------------------------
 extensions.append("sphinx_copybutton")
@@ -40,6 +41,12 @@ copybutton_selector = "div:not(.no-copybutton) > div.highlight > pre"
 
 templates_path = []
 exclude_patterns = ["_build", "**.ipynb_checkpoints"]
+
+# -- nbsphinx configuration --------------------------------------------------
+nbsphinx_allow_errors = False
+nbsphinx_execute = "auto"
+# Don't add notebook metadata to the output
+nbsphinx_prolog = ""
 
 # This assumes that sphinx-build is called from the root directory
 master_doc = "index"
