@@ -118,7 +118,7 @@ Histograms are useful when:
 - You're optimizing buffer sizes or chunk sizes
 - You're comparing different I/O strategies
 
-**Note:** Histogram mode is only available with ``strace`` (Linux) and ``fs_usage`` (macOS) measurement backends. It requires collecting detailed operation data, which adds some overhead.
+**Note:** Histogram mode is available when using ``strace`` on Linux and ``fs_usage`` on macOS. These tools provide operation-level detail needed for histogram generation. If strace is not available on Linux, the extension falls back to psutil (without histogram support). Histogram collection adds some overhead due to detailed tracking.
 
 Practical Examples
 ------------------

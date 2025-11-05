@@ -17,7 +17,7 @@ Installation Issues
 
    .. code-block:: console
 
-      >> pip list | grep iops-profiler
+      >> pip list | grep iops
 
 2. Check you're using the correct Python environment:
 
