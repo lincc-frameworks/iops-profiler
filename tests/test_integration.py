@@ -8,6 +8,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 import sys
 from iops_profiler.magic import IOPSProfiler, load_ipython_extension, unload_ipython_extension
+from iops_profiler import collector, display
 
 
 def create_test_profiler():
@@ -90,7 +91,7 @@ class TestHelperScriptCreation:
         output_file = "/tmp/test_output.txt"
         control_file = "/tmp/test_control.ctrl"
         
-        script = profiler._create_helper_script(pid, output_file, control_file)
+        script = collector.create_helper_script(pid, output_file, control_file)
         
         # Verify script contains expected elements
         assert str(pid) in script
@@ -105,7 +106,7 @@ class TestHelperScriptCreation:
         output_file = "/tmp/out.txt"
         control_file = "/tmp/ctrl.txt"
         
-        script = profiler._create_helper_script(pid, output_file, control_file)
+        script = collector.create_helper_script(pid, output_file, control_file)
         
         # Should contain cleanup logic
         assert "killall" in script
@@ -182,7 +183,7 @@ class TestEdgeCaseOperations:
         total_write_bytes = 0
         
         for line in lines:
-            op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+            op_type, bytes_transferred = collector.parse_fs_usage_line(line)
             if op_type == 'read':
                 total_read_bytes += bytes_transferred
             elif op_type == 'write':
@@ -229,7 +230,7 @@ class TestEdgeCaseOperations:
         total_bytes = 0
         
         for line in lines:
-            op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+            op_type, bytes_transferred = collector.parse_fs_usage_line(line)
             if op_type:
                 valid_ops += 1
                 total_bytes += bytes_transferred
@@ -332,7 +333,7 @@ class TestCollectOpsMode:
         
         operations = []
         for line in lines:
-            op = profiler._parse_fs_usage_line(line, collect_ops=True)
+            op = collector.parse_fs_usage_line(line, collect_ops=True)
             if op:
                 operations.append(op)
         
@@ -396,7 +397,7 @@ class TestBugDocumentation:
         What happens if B= has unexpected format like "0x" without digits?
         """
         line = "12:34:56  read  B=0x  /file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         
         # Should handle gracefully
         assert op_type == 'read'
@@ -426,7 +427,7 @@ class TestBugDocumentation:
         
         # Should handle gracefully - current implementation filters out zero-byte ops
         # so this should print a warning and return
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
     
     def test_strace_extremely_large_pid(self, profiler):
         """

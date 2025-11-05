@@ -8,6 +8,7 @@ including various edge cases and error conditions.
 import pytest
 from unittest.mock import Mock, MagicMock
 from iops_profiler.magic import IOPSProfiler
+from iops_profiler import collector
 
 
 class TestStraceLineParsing:
@@ -290,14 +291,14 @@ class TestFsUsageLineParsing:
     def test_basic_read_operation_with_read_substring(self, profiler):
         """Test parsing read operations that contain 'read' substring (works)"""
         line = "12:34:56  read  B=0x1000  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 0x1000  # 4096 bytes
     
     def test_basic_write_operation_with_write_substring(self, profiler):
         """Test parsing write operations that contain 'write' substring (works)"""
         line = "12:34:56  write  B=0x800  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 0x800  # 2048 bytes
     
@@ -310,7 +311,7 @@ class TestFsUsageLineParsing:
             ("12:34:56  pread  B=0x400  /file  Python", True),
         ]
         for line, should_parse in lines:
-            op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+            op_type, bytes_transferred = collector.parse_fs_usage_line(line)
             if should_parse:
                 assert op_type == 'read', f"Failed for line: {line}"
                 assert bytes_transferred > 0
@@ -326,7 +327,7 @@ class TestFsUsageLineParsing:
             ("12:34:56  pwrite  B=0x400  /file  Python", True),
         ]
         for line, should_parse in lines:
-            op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+            op_type, bytes_transferred = collector.parse_fs_usage_line(line)
             if should_parse:
                 assert op_type == 'write', f"Failed for line: {line}"
                 assert bytes_transferred > 0
@@ -336,70 +337,70 @@ class TestFsUsageLineParsing:
     def test_zero_bytes(self, profiler):
         """Test parsing operations with zero bytes"""
         line = "12:34:56  read  B=0x0  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 0
     
     def test_large_byte_count(self, profiler):
         """Test parsing operations with large byte counts"""
         line = "12:34:56  write  B=0x100000  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 0x100000  # 1 MB
     
     def test_very_large_hex_value(self, profiler):
         """Test parsing operations with very large hex values"""
         line = "12:34:56  write  B=0xFFFFFFFF  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 0xFFFFFFFF
     
     def test_missing_byte_field(self, profiler):
         """Test parsing lines without B= field"""
         line = "12:34:56  read  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 0
     
     def test_malformed_byte_field(self, profiler):
         """Test parsing lines with malformed B= field"""
         line = "12:34:56  read  B=invalid  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 0
     
     def test_non_io_operation_ignored(self, profiler):
         """Test that non-I/O operations are ignored"""
         line = "12:34:56  open  B=0x1000  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_empty_line_ignored(self, profiler):
         """Test that empty lines are ignored"""
         line = ""
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_malformed_line_ignored(self, profiler):
         """Test that malformed lines are ignored"""
         line = "not a valid fs_usage line"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_single_field_line(self, profiler):
         """Test parsing lines with only one field"""
         line = "read"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_collect_ops_mode(self, profiler):
         """Test parsing with collect_ops=True returns dict format"""
         line = "12:34:56  read  B=0x1000  /path/to/file  Python"
-        result = profiler._parse_fs_usage_line(line, collect_ops=True)
+        result = collector.parse_fs_usage_line(line, collect_ops=True)
         assert isinstance(result, dict)
         assert result['type'] == 'read'
         assert result['bytes'] == 0x1000
@@ -407,7 +408,7 @@ class TestFsUsageLineParsing:
     def test_collect_ops_mode_non_io(self, profiler):
         """Test parsing non-I/O operation with collect_ops=True returns None"""
         line = "12:34:56  open  B=0x1000  /path/to/file  Python"
-        result = profiler._parse_fs_usage_line(line, collect_ops=True)
+        result = collector.parse_fs_usage_line(line, collect_ops=True)
         assert result is None
     
     def test_mixed_case_syscall_names(self, profiler):
@@ -418,27 +419,27 @@ class TestFsUsageLineParsing:
             "12:34:56  pREAD  B=0x100  /file  Python",
         ]
         for line in lines:
-            op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+            op_type, bytes_transferred = collector.parse_fs_usage_line(line)
             assert op_type is not None, f"Failed to parse: {line}"
     
     def test_hex_value_uppercase(self, profiler):
         """Test parsing hex values with uppercase letters"""
         line = "12:34:56  read  B=0xABCDEF  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 0xABCDEF
     
     def test_hex_value_lowercase(self, profiler):
         """Test parsing hex values with lowercase letters"""
         line = "12:34:56  read  B=0xabcdef  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 0xabcdef
     
     def test_hex_value_mixed_case(self, profiler):
         """Test parsing hex values with mixed case letters"""
         line = "12:34:56  read  B=0xAbCdEf  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 0xAbCdEf
 
@@ -480,7 +481,7 @@ class TestParsingEdgeCases:
     def test_fs_usage_line_with_special_path(self, profiler):
         """Test parsing fs_usage line with special characters in path"""
         line = "12:34:56  read  B=0x100  /path/with spaces/file.txt  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
+        op_type, bytes_transferred = collector.parse_fs_usage_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 0x100
     

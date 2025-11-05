@@ -29,21 +29,6 @@ class IOPSProfiler(Magics):
         # Set of syscall names for I/O operations (lowercase)
         self._io_syscalls = set(collector.STRACE_IO_SYSCALLS)
     
-    def _parse_fs_usage_line(self, line, collect_ops=False):
-        """Parse a single fs_usage output line for I/O operations
-        
-        This is a compatibility wrapper that delegates to the collector module.
-        
-        Args:
-            line: The line to parse
-            collect_ops: If True, return full operation info for histogram collection
-        
-        Returns:
-            If collect_ops is False: (op_type, bytes_transferred)
-            If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred}
-        """
-        return collector.parse_fs_usage_line(line, collect_ops)
-    
     def _parse_strace_line(self, line, collect_ops=False):
         """Parse a single strace output line for I/O operations
         
@@ -58,20 +43,6 @@ class IOPSProfiler(Magics):
             If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred}
         """
         return collector.parse_strace_line(line, self._strace_pattern, self._io_syscalls, collect_ops)
-    
-    def _create_helper_script(self, pid, output_file, control_file):
-        """Create a bash helper script that runs fs_usage with elevated privileges
-        
-        This is a compatibility wrapper that delegates to the collector module.
-        """
-        return collector.create_helper_script(pid, output_file, control_file)
-    
-    def _launch_helper_via_osascript(self, helper_script_path):
-        """Launch helper script with sudo via osascript (prompts for password)
-        
-        This is a compatibility wrapper that delegates to the collector module.
-        """
-        return collector.launch_helper_via_osascript(helper_script_path)
     
     def _measure_macos_osascript(self, code, collect_ops=False):
         """Measure IOPS on macOS using fs_usage via osascript
@@ -108,66 +79,6 @@ class IOPSProfiler(Magics):
         This is a compatibility wrapper that delegates to the collector module.
         """
         return collector.measure_systemwide_fallback(self.shell, code)
-    
-    def _is_notebook_environment(self):
-        """Detect if running in a graphical notebook environment vs plain IPython.
-        
-        This is a compatibility wrapper that delegates to the display module.
-        
-        Returns:
-            bool: True if in a notebook with display capabilities, False for plain IPython
-        """
-        return display.is_notebook_environment()
-    
-    def _format_bytes(self, bytes_val):
-        """Format bytes into human-readable string
-        
-        This is a compatibility wrapper that delegates to the display module.
-        """
-        return display.format_bytes(bytes_val)
-    
-    def _generate_histograms(self, operations):
-        """Generate histograms for I/O operations using numpy
-        
-        This is a compatibility wrapper that delegates to the display module.
-        
-        Args:
-            operations: List of dicts with 'type' and 'bytes' keys
-        """
-        return display.generate_histograms(operations)
-    
-    def _display_results_plain_text(self, results):
-        """Display results in plain text format for terminal/console environments.
-        
-        This is a compatibility wrapper that delegates to the display module.
-        
-        Args:
-            results: Dictionary containing profiling results
-        """
-        return display.display_results_plain_text(results)
-    
-    def _display_results_html(self, results):
-        """Display results in HTML format for notebook environments.
-        
-        This is a compatibility wrapper that delegates to the display module.
-        
-        Args:
-            results: Dictionary containing profiling results
-        """
-        return display.display_results_html(results)
-    
-    def _display_results(self, results):
-        """Display results in appropriate format based on environment.
-        
-        This is a compatibility wrapper that delegates to the display module.
-        
-        Args:
-            results: Dictionary containing profiling results
-        """
-        if self._is_notebook_environment():
-            self._display_results_html(results)
-        else:
-            self._display_results_plain_text(results)
     
     def _profile_code(self, code, show_histogram=False):
         """
@@ -280,11 +191,11 @@ class IOPSProfiler(Magics):
             results = self._profile_code(code, show_histogram)
             
             # Display results table
-            self._display_results(results)
+            display.display_results(results)
             
             # Display histograms if requested and available
             if show_histogram and 'operations' in results:
-                self._generate_histograms(results['operations'])
+                display.generate_histograms(results['operations'])
         
         except Exception as e:
             print(f"❌ Error during IOPS profiling: {e}")

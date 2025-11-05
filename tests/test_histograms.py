@@ -9,6 +9,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 import numpy as np
 from iops_profiler.magic import IOPSProfiler
+from iops_profiler import display
 
 
 def create_test_profiler():
@@ -37,58 +38,58 @@ class TestFormatBytes:
     
     def test_bytes_formatting(self, profiler):
         """Test formatting bytes (< 1 KB)"""
-        assert profiler._format_bytes(0) == "0.00 B"
-        assert profiler._format_bytes(1) == "1.00 B"
-        assert profiler._format_bytes(512) == "512.00 B"
-        assert profiler._format_bytes(1023) == "1023.00 B"
+        assert display.format_bytes(0) == "0.00 B"
+        assert display.format_bytes(1) == "1.00 B"
+        assert display.format_bytes(512) == "512.00 B"
+        assert display.format_bytes(1023) == "1023.00 B"
     
     def test_kilobytes_formatting(self, profiler):
         """Test formatting kilobytes"""
-        assert profiler._format_bytes(1024) == "1.00 KB"
-        assert profiler._format_bytes(1536) == "1.50 KB"
-        assert profiler._format_bytes(2048) == "2.00 KB"
-        assert profiler._format_bytes(1024 * 1023) == "1023.00 KB"
+        assert display.format_bytes(1024) == "1.00 KB"
+        assert display.format_bytes(1536) == "1.50 KB"
+        assert display.format_bytes(2048) == "2.00 KB"
+        assert display.format_bytes(1024 * 1023) == "1023.00 KB"
     
     def test_megabytes_formatting(self, profiler):
         """Test formatting megabytes"""
-        assert profiler._format_bytes(1024 * 1024) == "1.00 MB"
-        assert profiler._format_bytes(1024 * 1024 * 1.5) == "1.50 MB"
-        assert profiler._format_bytes(1024 * 1024 * 100) == "100.00 MB"
+        assert display.format_bytes(1024 * 1024) == "1.00 MB"
+        assert display.format_bytes(1024 * 1024 * 1.5) == "1.50 MB"
+        assert display.format_bytes(1024 * 1024 * 100) == "100.00 MB"
     
     def test_gigabytes_formatting(self, profiler):
         """Test formatting gigabytes"""
-        assert profiler._format_bytes(1024 * 1024 * 1024) == "1.00 GB"
-        assert profiler._format_bytes(1024 * 1024 * 1024 * 2.5) == "2.50 GB"
+        assert display.format_bytes(1024 * 1024 * 1024) == "1.00 GB"
+        assert display.format_bytes(1024 * 1024 * 1024 * 2.5) == "2.50 GB"
     
     def test_terabytes_formatting(self, profiler):
         """Test formatting terabytes"""
-        assert profiler._format_bytes(1024 * 1024 * 1024 * 1024) == "1.00 TB"
-        assert profiler._format_bytes(1024 * 1024 * 1024 * 1024 * 5.25) == "5.25 TB"
+        assert display.format_bytes(1024 * 1024 * 1024 * 1024) == "1.00 TB"
+        assert display.format_bytes(1024 * 1024 * 1024 * 1024 * 5.25) == "5.25 TB"
     
     def test_very_large_values(self, profiler):
         """Test formatting very large values (> 1 PB)"""
         # Values larger than 1024 TB should still show as TB
-        result = profiler._format_bytes(1024 * 1024 * 1024 * 1024 * 2000)
+        result = display.format_bytes(1024 * 1024 * 1024 * 1024 * 2000)
         assert "TB" in result
         assert float(result.split()[0]) > 1000
     
     def test_edge_case_boundary_values(self, profiler):
         """Test boundary values between units"""
-        assert "B" in profiler._format_bytes(1023.9)
-        assert "KB" in profiler._format_bytes(1024.1)
-        assert "KB" in profiler._format_bytes(1024 * 1023.9)
-        assert "MB" in profiler._format_bytes(1024 * 1024.1)
+        assert "B" in display.format_bytes(1023.9)
+        assert "KB" in display.format_bytes(1024.1)
+        assert "KB" in display.format_bytes(1024 * 1023.9)
+        assert "MB" in display.format_bytes(1024 * 1024.1)
     
     def test_fractional_bytes(self, profiler):
         """Test formatting fractional byte values"""
-        result = profiler._format_bytes(100.5)
+        result = display.format_bytes(100.5)
         assert result == "100.50 B"
     
     def test_negative_values(self, profiler):
         """Test formatting negative values (edge case, shouldn't happen in practice)"""
         # The function doesn't explicitly handle negative values,
         # but we should document the behavior
-        result = profiler._format_bytes(-1024)
+        result = display.format_bytes(-1024)
         assert "-" in result or result.startswith("-")
 
 
@@ -120,7 +121,7 @@ class TestGenerateHistograms:
         
         operations = []
         # Should print warning and return early
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should not be called since no plots were created
         mock_show.assert_not_called()
@@ -139,7 +140,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 0},
         ]
         # Should print warning and return early
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should not be called since no plots were created
         mock_show.assert_not_called()
@@ -154,7 +155,7 @@ class TestGenerateHistograms:
         
         operations = [{'type': 'read', 'bytes': 1024}]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -201,7 +202,7 @@ class TestGenerateHistograms:
             {'type': 'write', 'bytes': 4096},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -239,7 +240,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 512},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -282,7 +283,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 4096},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -323,7 +324,7 @@ class TestGenerateHistograms:
             {'type': 'write', 'bytes': 4096},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -371,7 +372,7 @@ class TestGenerateHistograms:
             {'type': 'write', 'bytes': 1000000000},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -409,7 +410,7 @@ class TestGenerateHistograms:
                 'bytes': (i % 100 + 1) * 100
             })
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -445,7 +446,7 @@ class TestGenerateHistograms:
         try:
             operations = [{'type': 'read', 'bytes': 1024}]
             # Should print warning and return early
-            profiler._generate_histograms(operations)
+            display.generate_histograms(operations)
         finally:
             # Restore original plt
             display.plt = original_plt
@@ -462,7 +463,7 @@ class TestGenerateHistograms:
         try:
             operations = [{'type': 'read', 'bytes': 1024}]
             # Should print warning and return early
-            profiler._generate_histograms(operations)
+            display.generate_histograms(operations)
         finally:
             # Restore original np
             display.np = original_np
@@ -480,7 +481,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 0},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -515,7 +516,7 @@ class TestGenerateHistograms:
             {'type': 'read', 'bytes': 8},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -566,7 +567,7 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.display.display')
@@ -581,7 +582,7 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.display.display')
@@ -597,7 +598,7 @@ class TestDisplayResults:
         }
         
         # Should handle division by zero gracefully
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.display.display')
@@ -612,7 +613,7 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.display.display')
@@ -627,7 +628,7 @@ class TestDisplayResults:
             'method': '⚠️ SYSTEM-WIDE (includes all processes)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         # Check that display was called
         mock_display.assert_called_once()
         # Get the HTML argument - it's an HTML object, so we need to access its data
@@ -650,7 +651,7 @@ class TestDisplayResults:
             'method': 'strace (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
     
     @patch('iops_profiler.display.display')
@@ -665,7 +666,7 @@ class TestDisplayResults:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results(results)
+        display.display_results(results)
         mock_display.assert_called_once()
 
 
@@ -700,7 +701,7 @@ class TestHistogramEdgeCases:
             {'type': 'write', 'bytes': 2},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -742,7 +743,7 @@ class TestHistogramEdgeCases:
             {'type': 'read', 'bytes': 1024},
         ]
         
-        profiler._generate_histograms(operations)
+        display.generate_histograms(operations)
         
         # plt.show should be called once
         mock_show.assert_called_once()

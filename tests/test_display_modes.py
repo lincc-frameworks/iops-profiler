@@ -7,6 +7,7 @@ This module tests the environment detection and appropriate display mode selecti
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from iops_profiler.magic import IOPSProfiler
+from iops_profiler import display
 
 
 def create_test_profiler():
@@ -39,7 +40,7 @@ class TestEnvironmentDetection:
         mock_ipython.__class__.__name__ = 'TerminalInteractiveShell'
         
         with patch('IPython.get_ipython', return_value=mock_ipython):
-            assert profiler._is_notebook_environment() is False
+            assert display.is_notebook_environment() is False
     
     def test_detect_graphical_environments(self, profiler):
         """Test detection of graphical environments returns True"""
@@ -49,17 +50,17 @@ class TestEnvironmentDetection:
             mock_ipython.__class__.__name__ = shell_type
             
             with patch('IPython.get_ipython', return_value=mock_ipython):
-                assert profiler._is_notebook_environment() is True, f"Failed for {shell_type}"
+                assert display.is_notebook_environment() is True, f"Failed for {shell_type}"
     
     def test_no_ipython_available(self, profiler):
         """Test when IPython is not available"""
         with patch('IPython.get_ipython', return_value=None):
-            assert profiler._is_notebook_environment() is False
+            assert display.is_notebook_environment() is False
     
     def test_exception_during_detection(self, profiler):
         """Test graceful handling when detection raises exception"""
         with patch('IPython.get_ipython', side_effect=Exception("Test error")):
-            assert profiler._is_notebook_environment() is False
+            assert display.is_notebook_environment() is False
 
 
 class TestDisplayFunctions:
@@ -81,7 +82,7 @@ class TestDisplayFunctions:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results_plain_text(results)
+        display.display_results_plain_text(results)
         captured = capsys.readouterr()
         
         # Verify key information is present
@@ -90,7 +91,7 @@ class TestDisplayFunctions:
         
         # Test with warning
         results['method'] = '⚠️ SYSTEM-WIDE (includes all processes)'
-        profiler._display_results_plain_text(results)
+        display.display_results_plain_text(results)
         captured = capsys.readouterr()
         assert 'Warning' in captured.out or '⚠️' in captured.out
     
@@ -106,11 +107,11 @@ class TestDisplayFunctions:
             'method': 'psutil (per-process)'
         }
         
-        profiler._display_results_html(results)
+        display.display_results_html(results)
         mock_display.assert_called_once()
     
     def test_display_routing(self, profiler):
-        """Test _display_results routes to correct display method"""
+        """Test display_results routes to correct display method"""
         results = {
             'read_count': 10,
             'write_count': 5,
@@ -121,15 +122,15 @@ class TestDisplayFunctions:
         }
         
         # Test notebook routing
-        with patch.object(profiler, '_is_notebook_environment', return_value=True):
-            with patch.object(profiler, '_display_results_html') as mock_html:
-                profiler._display_results(results)
+        with patch('iops_profiler.display.is_notebook_environment', return_value=True):
+            with patch('iops_profiler.display.display_results_html') as mock_html:
+                display.display_results(results)
                 mock_html.assert_called_once_with(results)
         
         # Test terminal routing
-        with patch.object(profiler, '_is_notebook_environment', return_value=False):
-            with patch.object(profiler, '_display_results_plain_text') as mock_plain:
-                profiler._display_results(results)
+        with patch('iops_profiler.display.is_notebook_environment', return_value=False):
+            with patch('iops_profiler.display.display_results_plain_text') as mock_plain:
+                display.display_results(results)
                 mock_plain.assert_called_once_with(results)
 
 
@@ -165,7 +166,7 @@ class TestHistogramBehavior:
         
         # Test terminal mode - saves to file
         with patch('iops_profiler.display.is_notebook_environment', return_value=False):
-            profiler._generate_histograms(operations)
+            display.generate_histograms(operations)
         
         mock_plt.savefig.assert_called_once()
         mock_plt.show.assert_not_called()
@@ -178,7 +179,7 @@ class TestHistogramBehavior:
         
         # Test notebook mode - shows inline
         with patch('iops_profiler.display.is_notebook_environment', return_value=True):
-            profiler._generate_histograms(operations)
+            display.generate_histograms(operations)
         
         mock_plt.show.assert_called_once()
         mock_plt.savefig.assert_not_called()
