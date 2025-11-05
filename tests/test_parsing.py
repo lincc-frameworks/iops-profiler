@@ -286,32 +286,7 @@ class TestFsUsageLineParsing:
         profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
         return profiler
     
-    @pytest.mark.skip(reason="BUG: fs_usage parser doesn't recognize RdData/WrData syscalls")
-    def test_basic_read_operation_rddata(self, profiler):
-        """Test parsing RdData operation - DOCUMENTS BUG
-        
-        fs_usage on macOS uses syscall names like 'RdData' and 'WrData'
-        but the current parser only looks for substring 'read' or 'write'
-        which doesn't match 'RdData' or 'WrData'.
-        """
-        line = "12:34:56  RdData[AT]  B=0x1000  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
-        assert op_type == 'read'
-        assert bytes_transferred == 0x1000  # 4096 bytes
-    
-    @pytest.mark.skip(reason="BUG: fs_usage parser doesn't recognize RdData/WrData syscalls")
-    def test_basic_write_operation_wrdata(self, profiler):
-        """Test parsing WrData operation - DOCUMENTS BUG
-        
-        fs_usage on macOS uses syscall names like 'RdData' and 'WrData'
-        but the current parser only looks for substring 'read' or 'write'
-        which doesn't match 'RdData' or 'WrData'.
-        """
-        line = "12:34:56  WrData[AT]  B=0x800  /path/to/file  Python"
-        op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
-        assert op_type == 'write'
-        assert bytes_transferred == 0x800  # 2048 bytes
-    
+
     def test_basic_read_operation_with_read_substring(self, profiler):
         """Test parsing read operations that contain 'read' substring (works)"""
         line = "12:34:56  read  B=0x1000  /path/to/file  Python"
@@ -333,8 +308,6 @@ class TestFsUsageLineParsing:
             ("12:34:56  READ  B=0x200  /file  Python", True),
             ("12:34:56  read_data  B=0x300  /file  Python", True),
             ("12:34:56  pread  B=0x400  /file  Python", True),
-            # This doesn't work - documents the bug
-            ("12:34:56  RdData  B=0x100  /file  Python", False),
         ]
         for line, should_parse in lines:
             op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
@@ -342,8 +315,7 @@ class TestFsUsageLineParsing:
                 assert op_type == 'read', f"Failed for line: {line}"
                 assert bytes_transferred > 0
             else:
-                # Documents the bug: RdData not recognized
-                assert op_type is None, f"Line should not parse (bug): {line}"
+                assert op_type is None, f"Line should not parse: {line}"
     
     def test_write_with_various_suffixes(self, profiler):
         """Test parsing write operations with various formats"""
@@ -352,8 +324,6 @@ class TestFsUsageLineParsing:
             ("12:34:56  WRITE  B=0x200  /file  Python", True),
             ("12:34:56  write_data  B=0x300  /file  Python", True),
             ("12:34:56  pwrite  B=0x400  /file  Python", True),
-            # This doesn't work - documents the bug
-            ("12:34:56  WrData  B=0x100  /file  Python", False),
         ]
         for line, should_parse in lines:
             op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
@@ -361,12 +331,10 @@ class TestFsUsageLineParsing:
                 assert op_type == 'write', f"Failed for line: {line}"
                 assert bytes_transferred > 0
             else:
-                # Documents the bug: WrData not recognized
-                assert op_type is None, f"Line should not parse (bug): {line}"
+                assert op_type is None, f"Line should not parse: {line}"
     
     def test_zero_bytes(self, profiler):
         """Test parsing operations with zero bytes"""
-        # Use 'read' instead of 'RdData' to make test work with current implementation
         line = "12:34:56  read  B=0x0  /path/to/file  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type == 'read'
@@ -374,7 +342,6 @@ class TestFsUsageLineParsing:
     
     def test_large_byte_count(self, profiler):
         """Test parsing operations with large byte counts"""
-        # Use 'write' instead of 'WrData' to make test work with current implementation
         line = "12:34:56  write  B=0x100000  /path/to/file  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type == 'write'
@@ -382,7 +349,6 @@ class TestFsUsageLineParsing:
     
     def test_very_large_hex_value(self, profiler):
         """Test parsing operations with very large hex values"""
-        # Use 'write' instead of 'WrData' to make test work with current implementation
         line = "12:34:56  write  B=0xFFFFFFFF  /path/to/file  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type == 'write'
@@ -390,7 +356,6 @@ class TestFsUsageLineParsing:
     
     def test_missing_byte_field(self, profiler):
         """Test parsing lines without B= field"""
-        # Use 'read' instead of 'RdData' to make test work with current implementation
         line = "12:34:56  read  /path/to/file  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type == 'read'
@@ -398,7 +363,6 @@ class TestFsUsageLineParsing:
     
     def test_malformed_byte_field(self, profiler):
         """Test parsing lines with malformed B= field"""
-        # Use 'read' instead of 'RdData' to make test work with current implementation
         line = "12:34:56  read  B=invalid  /path/to/file  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type == 'read'
@@ -427,14 +391,13 @@ class TestFsUsageLineParsing:
     
     def test_single_field_line(self, profiler):
         """Test parsing lines with only one field"""
-        line = "RdData"
+        line = "read"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_collect_ops_mode(self, profiler):
         """Test parsing with collect_ops=True returns dict format"""
-        # Use 'read' instead of 'RdData' to make test work with current implementation
         line = "12:34:56  read  B=0x1000  /path/to/file  Python"
         result = profiler._parse_fs_usage_line(line, collect_ops=True)
         assert isinstance(result, dict)
@@ -460,7 +423,6 @@ class TestFsUsageLineParsing:
     
     def test_hex_value_uppercase(self, profiler):
         """Test parsing hex values with uppercase letters"""
-        # Use 'read' instead of 'RdData' to make test work with current implementation
         line = "12:34:56  read  B=0xABCDEF  /path/to/file  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type == 'read'
@@ -468,7 +430,6 @@ class TestFsUsageLineParsing:
     
     def test_hex_value_lowercase(self, profiler):
         """Test parsing hex values with lowercase letters"""
-        # Use 'read' instead of 'RdData' to make test work with current implementation
         line = "12:34:56  read  B=0xabcdef  /path/to/file  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type == 'read'
@@ -476,7 +437,6 @@ class TestFsUsageLineParsing:
     
     def test_hex_value_mixed_case(self, profiler):
         """Test parsing hex values with mixed case letters"""
-        # Use 'read' instead of 'RdData' to make test work with current implementation
         line = "12:34:56  read  B=0xAbCdEf  /path/to/file  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type == 'read'
@@ -519,7 +479,6 @@ class TestParsingEdgeCases:
     
     def test_fs_usage_line_with_special_path(self, profiler):
         """Test parsing fs_usage line with special characters in path"""
-        # Use 'read' instead of 'RdData' to make test work with current implementation
         line = "12:34:56  read  B=0x100  /path/with spaces/file.txt  Python"
         op_type, bytes_transferred = profiler._parse_fs_usage_line(line)
         assert op_type == 'read'

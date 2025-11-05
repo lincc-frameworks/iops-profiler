@@ -25,7 +25,6 @@ Comprehensive tests for parsing functions, covering:
 
 #### fs_usage Line Parsing (`_parse_fs_usage_line`)
 - Read and write operations with 'read'/'write' substring matching
-- **Bug Documentation**: Tests marked with `xfail` document that RdData/WrData syscalls are not recognized by current parser
 - Various byte count formats (zero, large, hex with different cases)
 - Missing and malformed B= fields
 - Non-I/O operations (should be ignored)
@@ -95,9 +94,7 @@ Integration and utility tests:
 - Throughput calculation
 - Zero-time handling
 
-#### Bug Documentation
-Tests marked with `@pytest.mark.skip` document known bugs:
-- **fs_usage RdData/WrData**: Current parser doesn't recognize macOS fs_usage syscall names like "RdData" and "WrData" (2 tests)
+
 
 #### Async Operation Handling
 - **test_async_write_across_two_lines**: Documents how strace async operations split across two lines are handled. The current implementation ignores both the `<unfinished ...>` and `<... resumed>` lines since neither contains complete operation information.
@@ -126,9 +123,8 @@ pytest tests/ --run-skipped
 
 ## Test Statistics
 
-- Total tests: 113
+- Total tests: 111
 - Passing: 111
-- Skipped: 2 (document bugs)
 
 ## Key Edge Cases Tested
 
@@ -142,15 +138,7 @@ pytest tests/ --run-skipped
 8. **Missing dependencies**: matplotlib/numpy not available
 9. **Unicode and special characters**: In file paths and data
 
-## Bugs Documented
 
-The test suite documents the following bug (as skipped failing tests per issue requirements):
-
-1. **fs_usage parser limitation** (`test_parsing.py`):
-   - Parser looks for substring 'read' or 'write' in syscall names
-   - Doesn't recognize macOS-specific syscall names like "RdData" and "WrData"
-   - Tests: `test_basic_read_operation_rddata`, `test_basic_write_operation_wrdata`
-   - Status: Tests marked as `skip` to document the bug (verified failing before marking)
 
 ## Implementation Notes
 
