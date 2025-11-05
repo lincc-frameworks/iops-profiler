@@ -549,13 +549,15 @@ exit 0
                 return False
             
             # Check the IPython kernel type
-            # Jupyter notebooks use ZMQInteractiveShell
-            # Plain IPython uses TerminalInteractiveShell
+            # TerminalInteractiveShell is definitively non-graphical (plain IPython)
+            # Everything else (ZMQInteractiveShell, etc.) is treated as graphical
+            # This handles Jupyter notebooks, JupyterLab, Google Colab, and other
+            # interactive environments with display capabilities
             ipython_type = type(ipython).__name__
             
-            # If it's a ZMQ shell (notebook), return True
-            # If it's a Terminal shell (plain ipython), return False
-            return ipython_type == 'ZMQInteractiveShell'
+            # Return False only for TerminalInteractiveShell (plain IPython)
+            # Return True for all other types (assume graphical capabilities)
+            return ipython_type != 'TerminalInteractiveShell'
         except (ImportError, AttributeError, Exception):
             # If we can't determine, assume plain environment
             return False
