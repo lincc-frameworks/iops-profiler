@@ -182,8 +182,6 @@ class TestGenerateHistograms:
         lines = ax2.get_lines()
         assert len(lines) >= 1  # At least "All Operations" line
         
-        # Clean up
-        plt.close('all')
     
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_all_operations_same_size(self, mock_show, profiler):
@@ -221,8 +219,6 @@ class TestGenerateHistograms:
         ydata = all_ops_line.get_ydata()
         assert sum(ydata) == 4  # 4 total operations
         
-        # Clean up
-        plt.close('all')
     
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_mixed_operations(self, mock_show, profiler):
@@ -268,8 +264,6 @@ class TestGenerateHistograms:
         assert sum(reads_line.get_ydata()) == 3    # 3 read operations
         assert sum(writes_line.get_ydata()) == 2   # 2 write operations
         
-        # Clean up
-        plt.close('all')
     
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_only_reads(self, mock_show, profiler):
@@ -311,8 +305,6 @@ class TestGenerateHistograms:
         assert sum(all_ops_line.get_ydata()) == 3  # 3 total operations
         assert sum(reads_line.get_ydata()) == 3    # 3 read operations
         
-        # Clean up
-        plt.close('all')
     
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_only_writes(self, mock_show, profiler):
@@ -354,8 +346,6 @@ class TestGenerateHistograms:
         assert sum(all_ops_line.get_ydata()) == 3  # 3 total operations
         assert sum(writes_line.get_ydata()) == 3   # 3 write operations
         
-        # Clean up
-        plt.close('all')
     
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_wide_range_of_byte_sizes(self, mock_show, profiler):
@@ -399,8 +389,6 @@ class TestGenerateHistograms:
         assert min(xdata) >= 1  # At least 1 byte
         assert max(xdata) <= 1000000000  # At most 1 GB
         
-        # Clean up
-        plt.close('all')
     
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_many_operations(self, mock_show, profiler):
@@ -438,8 +426,6 @@ class TestGenerateHistograms:
         assert sum(reads_line.get_ydata()) == 5000     # 5000 read operations
         assert sum(writes_line.get_ydata()) == 5000    # 5000 write operations
         
-        # Clean up
-        plt.close('all')
     
     def test_no_matplotlib_installed(self, profiler):
         """Test histogram generation when matplotlib is not available"""
@@ -509,8 +495,6 @@ class TestGenerateHistograms:
         assert sum(all_ops_line.get_ydata()) == 2  # Only 2 non-zero operations
         assert sum(writes_line.get_ydata()) == 2   # 2 write operations
         
-        # Clean up
-        plt.close('all')
     
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_very_small_bytes(self, mock_show, profiler):
@@ -548,8 +532,6 @@ class TestGenerateHistograms:
         assert sum(reads_line.get_ydata()) == 3    # 3 read operations
         assert sum(writes_line.get_ydata()) == 2   # 2 write operations
         
-        # Clean up
-        plt.close('all')
 
 
 class TestDisplayResults:
@@ -683,6 +665,13 @@ class TestHistogramEdgeCases:
         """Create an IOPSProfiler instance with a mock shell"""
         return create_test_profiler()
     
+    @pytest.fixture(autouse=True)
+    def close_figures(self):
+        """Automatically close all matplotlib figures after each test"""
+        import matplotlib.pyplot as plt
+        yield
+        plt.close('all')
+    
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_single_byte_minimum(self, mock_show, profiler):
         """Test histogram when minimum byte size is 1"""
@@ -715,8 +704,6 @@ class TestHistogramEdgeCases:
         xdata = all_ops_line.get_xdata()
         assert min(xdata) >= 1  # Minimum should be at least 1 byte
         
-        # Clean up
-        plt.close('all')
     
     @patch('iops_profiler.iops_profiler.plt.show')
     def test_power_of_two_sizes(self, mock_show, profiler):
@@ -760,5 +747,3 @@ class TestHistogramEdgeCases:
         assert sum(reads_line.get_ydata()) == 6     # 6 read operations
         assert sum(writes_line.get_ydata()) == 5    # 5 write operations
         
-        # Clean up
-        plt.close('all')
