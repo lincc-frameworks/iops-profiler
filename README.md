@@ -56,24 +56,64 @@ The extension will display a table showing:
 
 Use the `--histogram` flag to visualize I/O operation distributions (available for `strace` and `fs_usage` measurement modes):
 
-**Line magic with histogram:**
-```python
-%iops --histogram open('test.txt', 'w').write('data' * 1000)
-```
-
-**Cell magic with histogram:**
+**Example - Analyzing I/O patterns with multiple file sizes:**
 ```python
 %%iops --histogram
-# Your code here
-with open('test.txt', 'w') as f:
-    f.write('data' * 1000)
+import tempfile
+import os
+import shutil
+
+# Create test files with different sizes
+test_dir = tempfile.mkdtemp()
+
+try:
+    # Write files of various sizes to create diverse write operations
+    # Small writes (few KB)
+    for i in range(5):
+        with open(os.path.join(test_dir, f'small_{i}.txt'), 'w') as f:
+            f.write('x' * 1024)  # 1 KB
+    
+    # Medium writes (tens of KB)
+    for i in range(3):
+        with open(os.path.join(test_dir, f'medium_{i}.txt'), 'w') as f:
+            f.write('y' * (10 * 1024))  # 10 KB
+    
+    # Large writes (hundreds of KB)
+    for i in range(2):
+        with open(os.path.join(test_dir, f'large_{i}.txt'), 'w') as f:
+            f.write('z' * (100 * 1024))  # 100 KB
+    
+    # Now read back the files to create diverse read operations
+    # Small reads
+    for i in range(5):
+        with open(os.path.join(test_dir, f'small_{i}.txt'), 'r') as f:
+            _ = f.read()
+    
+    # Medium reads
+    for i in range(3):
+        with open(os.path.join(test_dir, f'medium_{i}.txt'), 'r') as f:
+            _ = f.read()
+    
+    # Large reads
+    for i in range(2):
+        with open(os.path.join(test_dir, f'large_{i}.txt'), 'r') as f:
+            _ = f.read()
+
+finally:
+    # Cleanup
+    if os.path.exists(test_dir):
+        shutil.rmtree(test_dir)
 ```
+
+This example generates a rich distribution of I/O operations across multiple size ranges, producing histograms like:
+
+![Histogram Example](images/histogram_example.png)
 
 When enabled, two histogram charts are displayed alongside the results table:
 1. **Operation Count Distribution**: Shows the count of I/O operations bucketed by bytes-per-operation (log scale)
 2. **Total Bytes Distribution**: Shows the total bytes transferred bucketed by bytes-per-operation (log scale)
 
-Both charts display separate lines for reads, writes, and all operations combined.
+Both charts display separate lines for reads, writes, and all operations combined, making it easy to identify patterns in your code's I/O behavior.
 
 ## Platform Support
 
