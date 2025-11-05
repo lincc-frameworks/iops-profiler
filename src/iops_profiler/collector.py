@@ -58,12 +58,12 @@ class Collector:
         self._io_syscalls = set(STRACE_IO_SYSCALLS)
     
     @staticmethod
-    def parse_fs_usage_line_static(line, byte_pattern, collect_ops=False):
+    def parse_fs_usage_line_static(line, byte_pattern=None, collect_ops=False):
         """Parse a single fs_usage output line for I/O operations (static version)
         
         Args:
             line: The line to parse
-            byte_pattern: Compiled regex pattern for extracting byte count
+            byte_pattern: Compiled regex pattern for extracting byte count (optional)
             collect_ops: If True, return full operation info for histogram collection
         
         Returns:
@@ -82,7 +82,11 @@ class Collector:
             return None if collect_ops else (None, 0)
         
         # Extract byte count from B=0x[hex] pattern using compiled regex
-        byte_match = byte_pattern.search(line)
+        if byte_pattern is None:
+            # Fallback to inline regex if no pattern provided (for backward compatibility)
+            byte_match = re.search(r'B=0x([0-9a-fA-F]+)', line)
+        else:
+            byte_match = byte_pattern.search(line)
         bytes_transferred = int(byte_match.group(1), 16) if byte_match else 0
         
         op_type = 'read' if is_read else 'write'
@@ -533,15 +537,9 @@ exit 0
         }
 
 
-# Module-level compiled patterns for backward compatibility
-_module_fs_usage_byte_pattern = re.compile(r'B=0x([0-9a-fA-F]+)')
-
 # Module-level functions for backward compatibility with tests
 # These directly reference the static methods to avoid code duplication
-def parse_fs_usage_line(line, collect_ops=False):
-    """Module-level wrapper for parse_fs_usage_line_static using module-level pattern"""
-    return Collector.parse_fs_usage_line_static(line, _module_fs_usage_byte_pattern, collect_ops)
-
+parse_fs_usage_line = Collector.parse_fs_usage_line_static
 parse_strace_line = Collector.parse_strace_line_static
 
 
