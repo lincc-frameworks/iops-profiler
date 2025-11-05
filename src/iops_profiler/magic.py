@@ -9,10 +9,9 @@ This module contains the IPython magic command integration and orchestration:
 """
 
 import sys
-import re
 from IPython.core.magic import Magics, magics_class, line_cell_magic
 
-from . import collector
+from .collector import Collector
 from . import display
 
 
@@ -22,63 +21,8 @@ class IOPSProfiler(Magics):
     def __init__(self, shell):
         super().__init__(shell)
         self.platform = sys.platform
-        # Compile regex patterns for better performance
-        # Pattern matches: PID syscall(args) = result
-        # This pattern skips unfinished/resumed calls as they don't have complete results yet
-        self._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-        # Set of syscall names for I/O operations (lowercase)
-        self._io_syscalls = set(collector.STRACE_IO_SYSCALLS)
-    
-    def _parse_strace_line(self, line, collect_ops=False):
-        """Parse a single strace output line for I/O operations
-        
-        This is a compatibility wrapper that delegates to the collector module.
-        
-        Args:
-            line: The line to parse
-            collect_ops: If True, return full operation info for histogram collection
-        
-        Returns:
-            If collect_ops is False: (op_type, bytes_transferred)
-            If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred}
-        """
-        return collector.parse_strace_line(line, self._strace_pattern, self._io_syscalls, collect_ops)
-    
-    def _measure_macos_osascript(self, code, collect_ops=False):
-        """Measure IOPS on macOS using fs_usage via osascript
-        
-        This is a compatibility wrapper that delegates to the collector module.
-        
-        Args:
-            code: The code to profile
-            collect_ops: If True, collect individual operation sizes for histogram
-        """
-        return collector.measure_macos_osascript(self.shell, code, collect_ops)
-    
-    def _measure_linux_strace(self, code, collect_ops=False):
-        """Measure IOPS on Linux using strace (no elevated privileges required)
-        
-        This is a compatibility wrapper that delegates to the collector module.
-        
-        Args:
-            code: The code to profile
-            collect_ops: If True, collect individual operation sizes for histogram
-        """
-        return collector.measure_linux_strace(self.shell, self._strace_pattern, self._io_syscalls, code, collect_ops)
-    
-    def _measure_linux_windows(self, code):
-        """Measure IOPS on Linux/Windows using psutil
-        
-        This is a compatibility wrapper that delegates to the collector module.
-        """
-        return collector.measure_linux_windows(self.shell, code)
-    
-    def _measure_systemwide_fallback(self, code):
-        """Fallback: system-wide I/O measurement using psutil
-        
-        This is a compatibility wrapper that delegates to the collector module.
-        """
-        return collector.measure_systemwide_fallback(self.shell, code)
+        # Initialize the collector with shell context
+        self.collector = Collector(shell)
     
     def _profile_code(self, code, show_histogram=False):
         """
@@ -92,47 +36,46 @@ class IOPSProfiler(Magics):
             Dictionary with profiling results
         """
         # Determine if we should collect individual operations
-        # Only collect for strace/fs_usage modes where detailed data is available
         collect_ops = show_histogram
         
         # Determine measurement method based on platform
         if self.platform == 'darwin':  # macOS
             try:
-                results = self._measure_macos_osascript(code, collect_ops=collect_ops)
+                results = self.collector.measure_macos_osascript(code, collect_ops=collect_ops)
             except RuntimeError as e:
                 if 'Resource busy' in str(e):
                     print("⚠️ ktrace is busy. Falling back to system-wide measurement.")
                     print("Tip: Try running 'sudo killall fs_usage' and retry.\n")
-                    results = self._measure_systemwide_fallback(code)
+                    results = self.collector.measure_systemwide_fallback(code)
                     if show_histogram:
                         print("⚠️ Histograms not available for system-wide measurement mode.")
                 else:
                     print(f"⚠️ Could not start fs_usage: {e}")
                     print("Falling back to system-wide measurement.\n")
-                    results = self._measure_systemwide_fallback(code)
+                    results = self.collector.measure_systemwide_fallback(code)
                     if show_histogram:
                         print("⚠️ Histograms not available for system-wide measurement mode.")
         
         elif self.platform in ('linux', 'linux2'):
             # Use strace on Linux (no elevated privileges required)
             try:
-                results = self._measure_linux_strace(code, collect_ops=collect_ops)
+                results = self.collector.measure_linux_strace(code, collect_ops=collect_ops)
             except (RuntimeError, FileNotFoundError) as e:
                 print(f"⚠️ Could not use strace: {e}")
                 print("Falling back to psutil per-process measurement.\n")
-                results = self._measure_linux_windows(code)
+                results = self.collector.measure_linux_windows(code)
                 if show_histogram:
                     print("⚠️ Histograms not available for psutil measurement mode.")
         
         elif self.platform == 'win32':
-            results = self._measure_linux_windows(code)
+            results = self.collector.measure_linux_windows(code)
             if show_histogram:
                 print("⚠️ Histograms not available for psutil measurement mode on Windows.")
         
         else:
             print(f"⚠️ Platform '{self.platform}' not fully supported.")
             print("Attempting system-wide measurement as fallback.\n")
-            results = self._measure_systemwide_fallback(code)
+            results = self.collector.measure_systemwide_fallback(code)
             if show_histogram:
                 print("⚠️ Histograms not available for system-wide measurement mode.")
         
@@ -160,19 +103,15 @@ class IOPSProfiler(Magics):
         """
         try:
             # Parse command line arguments
-            # For line magic, check if --histogram appears at the start
-            # For cell magic, check if --histogram is in the line parameter (not the cell)
             show_histogram = False
             code = None
             
             # Determine what code to execute
             if cell is None:
                 # Line magic mode - code is in the line parameter
-                # Check if line starts with --histogram flag (as a complete token)
                 line_stripped = line.strip()
                 if line_stripped == '--histogram' or line_stripped.startswith('--histogram '):
                     show_histogram = True
-                    # Remove the --histogram prefix and any following whitespace
                     code = line_stripped[len('--histogram'):].strip()
                 else:
                     code = line_stripped
@@ -183,7 +122,6 @@ class IOPSProfiler(Magics):
                     return
             else:
                 # Cell magic mode - code is in the cell parameter
-                # Check if --histogram flag is in the line parameter
                 show_histogram = '--histogram' in line
                 code = cell
             

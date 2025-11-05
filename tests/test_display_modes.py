@@ -16,13 +16,12 @@ def create_test_profiler():
     mock_shell.configurables = []
     profiler = IOPSProfiler.__new__(IOPSProfiler)
     profiler.shell = mock_shell
-    # Initialize the parent attributes manually to avoid traitlets
+    # Initialize the profiler attributes manually to avoid traitlets
     import sys
     profiler.platform = sys.platform
-    import re
-    profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
-    from iops_profiler.collector import STRACE_IO_SYSCALLS
-    profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
+    # Initialize the collector with the mock shell
+    from iops_profiler.collector import Collector
+    profiler.collector = Collector(mock_shell)
     return profiler
 
 

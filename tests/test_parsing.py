@@ -25,163 +25,163 @@ class TestStraceLineParsing:
         # Initialize the parent attributes manually to avoid traitlets
         import sys
         profiler.platform = sys.platform
-        import re
-        profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
+        # Initialize the collector with the mock shell
+        from iops_profiler.collector import Collector
+        profiler.collector = Collector(mock_shell)
         from iops_profiler.collector import STRACE_IO_SYSCALLS
-        profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
         return profiler
     
     def test_basic_read_operation(self, profiler):
         """Test parsing a basic read operation"""
         line = "3385  read(3, \"data\", 4096) = 133"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 133
     
     def test_basic_write_operation(self, profiler):
         """Test parsing a basic write operation"""
         line = "3385  write(3, \"Hello World...\", 1100) = 1100"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 1100
     
     def test_pread64_operation(self, profiler):
         """Test parsing a pread64 operation"""
         line = "3385  pread64(3, \"...\", 1024, 0) = 1024"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 1024
     
     def test_pwrite64_operation(self, profiler):
         """Test parsing a pwrite64 operation"""
         line = "3385  pwrite64(4, \"data\", 512, 1024) = 512"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 512
     
     def test_readv_operation(self, profiler):
         """Test parsing a readv (vectored read) operation"""
         line = "3385  readv(5, [{iov_base=\"...\", iov_len=1024}], 1) = 1024"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 1024
     
     def test_writev_operation(self, profiler):
         """Test parsing a writev (vectored write) operation"""
         line = "3385  writev(5, [{iov_base=\"...\", iov_len=2048}], 1) = 2048"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 2048
     
     def test_preadv_operation(self, profiler):
         """Test parsing a preadv operation"""
         line = "3385  preadv(6, [{...}], 2, 0) = 512"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 512
     
     def test_pwritev_operation(self, profiler):
         """Test parsing a pwritev operation"""
         line = "3385  pwritev(6, [{...}], 2, 1024) = 1024"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 1024
     
     def test_preadv2_operation(self, profiler):
         """Test parsing a preadv2 operation"""
         line = "3385  preadv2(7, [{...}], 1, 0, 0) = 256"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 256
     
     def test_pwritev2_operation(self, profiler):
         """Test parsing a pwritev2 operation"""
         line = "3385  pwritev2(7, [{...}], 1, 512, 0) = 512"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 512
     
     def test_zero_bytes_read(self, profiler):
         """Test parsing a read that returns 0 bytes (EOF)"""
         line = "3385  read(3, \"\", 4096) = 0"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 0
     
     def test_zero_bytes_write(self, profiler):
         """Test parsing a write that returns 0 bytes"""
         line = "3385  write(3, \"\", 0) = 0"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 0
     
     def test_error_negative_return(self, profiler):
         """Test parsing an operation that failed (negative return)"""
         line = "3385  read(3, 0x..., 4096) = -1 EBADF (Bad file descriptor)"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_unfinished_operation_ignored(self, profiler):
         """Test that unfinished operations are ignored"""
         line = "3385  read(3, <unfinished ...>"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_resumed_operation_ignored(self, profiler):
         """Test that resumed operations are ignored"""
         line = "3385  <... read resumed> \"data\", 4096) = 133"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_non_io_syscall_ignored(self, profiler):
         """Test that non-I/O syscalls are ignored"""
         line = "3385  open(\"/tmp/test.txt\", O_RDONLY) = 3"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_malformed_line_ignored(self, profiler):
         """Test that malformed lines are ignored"""
         line = "this is not a valid strace line"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_empty_line_ignored(self, profiler):
         """Test that empty lines are ignored"""
         line = ""
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_whitespace_only_line_ignored(self, profiler):
         """Test that whitespace-only lines are ignored"""
         line = "   \t  \n"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_very_large_byte_count(self, profiler):
         """Test parsing operations with very large byte counts"""
         line = "3385  write(3, \"...\", 1073741824) = 1073741824"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 1073741824  # 1 GB
     
     def test_single_byte_operation(self, profiler):
         """Test parsing single-byte operations"""
         line = "3385  read(3, \"x\", 1) = 1"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 1
     
     def test_collect_ops_mode(self, profiler):
         """Test parsing with collect_ops=True returns dict format"""
         line = "3385  read(3, \"data\", 4096) = 133"
-        result = profiler._parse_strace_line(line, collect_ops=True)
+        result = profiler.collector.parse_strace_line(line, collect_ops=True)
         assert isinstance(result, dict)
         assert result['type'] == 'read'
         assert result['bytes'] == 133
@@ -189,33 +189,33 @@ class TestStraceLineParsing:
     def test_collect_ops_mode_error(self, profiler):
         """Test parsing error with collect_ops=True returns None"""
         line = "3385  read(3, 0x..., 4096) = -1 EBADF"
-        result = profiler._parse_strace_line(line, collect_ops=True)
+        result = profiler.collector.parse_strace_line(line, collect_ops=True)
         assert result is None
     
     def test_collect_ops_mode_non_io(self, profiler):
         """Test parsing non-I/O syscall with collect_ops=True returns None"""
         line = "3385  open(\"/tmp/test.txt\", O_RDONLY) = 3"
-        result = profiler._parse_strace_line(line, collect_ops=True)
+        result = profiler.collector.parse_strace_line(line, collect_ops=True)
         assert result is None
     
     def test_multiple_spaces_in_line(self, profiler):
         """Test parsing lines with multiple spaces"""
         line = "  3385    read(3,   \"data\",   4096)   =   133"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 133
     
     def test_partial_write(self, profiler):
         """Test parsing a write that only partially succeeded"""
         line = "3385  write(3, \"data\"..., 1000) = 500"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 500
     
     def test_partial_read(self, profiler):
         """Test parsing a read that returned less than requested"""
         line = "3385  read(3, \"partial\"..., 8192) = 42"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'read'
         assert bytes_transferred == 42
     
@@ -250,7 +250,7 @@ class TestStraceLineParsing:
         total_write_bytes = 0
         
         for line in lines:
-            op_type, bytes_transferred = profiler._parse_strace_line(line)
+            op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
             if op_type == 'read':
                 read_count += 1
                 total_read_bytes += bytes_transferred
@@ -281,10 +281,10 @@ class TestFsUsageLineParsing:
         # Initialize the parent attributes manually to avoid traitlets
         import sys
         profiler.platform = sys.platform
-        import re
-        profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
+        # Initialize the collector with the mock shell
+        from iops_profiler.collector import Collector
+        profiler.collector = Collector(mock_shell)
         from iops_profiler.collector import STRACE_IO_SYSCALLS
-        profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
         return profiler
     
 
@@ -458,23 +458,23 @@ class TestParsingEdgeCases:
         # Initialize the parent attributes manually to avoid traitlets
         import sys
         profiler.platform = sys.platform
-        import re
-        profiler._strace_pattern = re.compile(r'^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)')
+        # Initialize the collector with the mock shell
+        from iops_profiler.collector import Collector
+        profiler.collector = Collector(mock_shell)
         from iops_profiler.collector import STRACE_IO_SYSCALLS
-        profiler._io_syscalls = set(STRACE_IO_SYSCALLS)
         return profiler
     
     def test_strace_line_with_unicode_content(self, profiler):
         """Test parsing strace line with unicode in the content"""
         line = "3385  write(3, \"Hello \\u4e16\\u754c\", 100) = 100"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 100
     
     def test_strace_line_with_special_chars(self, profiler):
         """Test parsing strace line with special characters"""
         line = "3385  write(3, \"\\n\\t\\r\\0\", 50) = 50"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 50
     
@@ -488,21 +488,21 @@ class TestParsingEdgeCases:
     def test_strace_interrupted_syscall(self, profiler):
         """Test parsing interrupted syscall (EINTR)"""
         line = "3385  read(3, 0x..., 4096) = -1 EINTR (Interrupted system call)"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_strace_would_block(self, profiler):
         """Test parsing EAGAIN/EWOULDBLOCK errors"""
         line = "3385  read(3, 0x..., 4096) = -1 EAGAIN (Resource temporarily unavailable)"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type is None
         assert bytes_transferred == 0
     
     def test_multiple_operations_same_line_strace(self, profiler):
         """Test that only the first operation is parsed per line"""
         line = "3385  read(3, \"data\", 100) = 50 write(4, \"other\", 100) = 100"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         # Should only parse the read operation
         assert op_type == 'read'
         assert bytes_transferred == 50
@@ -511,7 +511,7 @@ class TestParsingEdgeCases:
         """Test parsing very long strace lines"""
         long_content = "x" * 10000
         line = f"3385  write(3, \"{long_content}\", 10000) = 10000"
-        op_type, bytes_transferred = profiler._parse_strace_line(line)
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
         assert op_type == 'write'
         assert bytes_transferred == 10000
     
@@ -523,6 +523,6 @@ class TestParsingEdgeCases:
             "9999999  read(3, \"data\", 100) = 100",
         ]
         for line in lines:
-            op_type, bytes_transferred = profiler._parse_strace_line(line)
+            op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
             assert op_type == 'read', f"Failed for line: {line}"
             assert bytes_transferred == 100
