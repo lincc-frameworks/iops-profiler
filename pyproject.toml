@@ -27,6 +27,8 @@ classifiers = [
 dependencies = [
     "ipython",
     "psutil",
+    "matplotlib",
+    "numpy",
 ]
 
 [project.urls]
