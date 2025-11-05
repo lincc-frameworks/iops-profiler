@@ -806,9 +806,9 @@ exit 0
             # Determine what code to execute
             if cell is None:
                 # Line magic mode - code is in the line parameter
-                # Check if line starts with --histogram flag
+                # Check if line starts with --histogram flag (as a complete token)
                 line_stripped = line.strip()
-                if line_stripped.startswith('--histogram'):
+                if line_stripped == '--histogram' or line_stripped.startswith('--histogram '):
                     show_histogram = True
                     # Remove the --histogram prefix and any following whitespace
                     code = line_stripped[len('--histogram'):].strip()
