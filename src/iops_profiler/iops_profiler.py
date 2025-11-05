@@ -798,22 +798,21 @@ exit 0
         """
         try:
             # Parse command line arguments
-            # Split on whitespace to properly detect flags
-            args = line.strip().split()
-            show_histogram = '--histogram' in args
+            show_histogram = '--histogram' in line
             
             # Determine what code to execute
             if cell is None:
                 # Line magic mode - code is in the line parameter
                 # Remove the --histogram flag from the code to execute
                 if show_histogram:
-                    code_parts = [arg for arg in args if arg != '--histogram']
-                    code = ' '.join(code_parts)
+                    # Remove only the first occurrence of --histogram to avoid affecting string literals
+                    code = line.replace('--histogram', '', 1).strip()
                 else:
                     code = line.strip()
                 
                 if not code:
-                    print("❌ Error: No code provided to profile.")
+                    print("❌ Error: No code provided to profile in line magic mode.")
+                    print("   Usage: %iops [--histogram] <code>")
                     return
             else:
                 # Cell magic mode - code is in the cell parameter
