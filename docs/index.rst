@@ -1,13 +1,57 @@
+iops-profiler Documentation
+===========================
 
-.. iops_profiler documentation main file.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+**iops-profiler** is a Jupyter IPython magic extension for measuring I/O operations per second (IOPS) in your code. Profile file operations directly in your notebooks with simple magic commands.
 
-Welcome to iops_profiler's documentation!
-========================================================================================
+Quick Start
+-----------
+
+Install iops-profiler:
+
+.. code-block:: console
+
+   >> pip install iops-profiler
+
+Load it in your Jupyter notebook:
+
+.. code-block:: python
+
+   %load_ext iops_profiler
+
+Profile your code:
+
+.. code-block:: python
+
+   %%iops
+   with open('test.txt', 'w') as f:
+       f.write('Hello, World!' * 1000)
+
+Get Started
+-----------
+
+.. toctree::
+   :maxdepth: 2
+
+   introduction
+   installation
+   user_guide
+   notebooks
+   platform_notes
+   troubleshooting
+
+API Reference
+-------------
+
+.. toctree::
+   :maxdepth: 2
+
+   API Reference <autoapi/index>
+
+Contributing
+------------
 
 Dev Guide - Getting Started
----------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Before installing any dependencies or writing code, it's a great idea to create a
 virtual environment. LINCC-Frameworks engineers primarily use `conda` to manage virtual
@@ -41,12 +85,3 @@ Notes:
    into documentation for ReadTheDocs works as expected. For more information, see
    the Python Project Template documentation on
    `Sphinx and Python Notebooks <https://lincc-ppt.readthedocs.io/en/latest/practices/sphinx.html#python-notebooks>`_.
-
-
-.. toctree::
-   :hidden:
-
-   Home page <self>
-   API Reference <autoapi/index>
-   Spectrogram Example <notebooks/spectrogram_example>
-   
