@@ -1,7 +1,7 @@
 """
-Tests for spectrogram generation and timestamp parsing in iops_profiler.
+Tests for heatmap generation and timestamp parsing in iops_profiler.
 
-This module focuses on testing spectrogram generation and timestamp extraction
+This module focuses on testing heatmap generation and timestamp extraction
 from strace and fs_usage output.
 """
 
@@ -99,8 +99,8 @@ class TestTimestampParsing:
         # timestamp field may or may not be present depending on the line format
 
 
-class TestSpectrogramGeneration:
-    """Test cases for spectrogram generation"""
+class TestHeatmapGeneration:
+    """Test cases for heatmap generation"""
 
     @pytest.fixture
     def profiler(self):
@@ -117,17 +117,17 @@ class TestSpectrogramGeneration:
 
     @pytest.fixture(autouse=True)
     def mock_notebook_environment(self, profiler):
-        """Mock is_notebook_environment to return True for spectrogram tests"""
+        """Mock is_notebook_environment to return True for heatmap tests"""
         with patch("iops_profiler.display.is_notebook_environment", return_value=True):
             yield
 
     @patch("iops_profiler.display.plt.show")
     def test_empty_operations_list(self, mock_show, profiler):
-        """Test spectrogram generation with empty operations list"""
+        """Test heatmap generation with empty operations list"""
         import matplotlib.pyplot as plt
 
         operations = []
-        display.generate_spectrogram(operations, 1.0)
+        display.generate_heatmap(operations, 1.0)
 
         # plt.show should not be called since no plots were created
         mock_show.assert_not_called()
@@ -137,14 +137,14 @@ class TestSpectrogramGeneration:
 
     @patch("iops_profiler.display.plt.show")
     def test_operations_without_timestamps(self, mock_show, profiler):
-        """Test spectrogram generation when operations lack timestamps"""
+        """Test heatmap generation when operations lack timestamps"""
         import matplotlib.pyplot as plt
 
         operations = [
             {"type": "read", "bytes": 1024},
             {"type": "write", "bytes": 2048},
         ]
-        display.generate_spectrogram(operations, 1.0)
+        display.generate_heatmap(operations, 1.0)
 
         # plt.show should not be called since no plots were created
         mock_show.assert_not_called()
@@ -154,7 +154,7 @@ class TestSpectrogramGeneration:
 
     @patch("iops_profiler.display.plt.show")
     def test_unix_timestamp_format(self, mock_show, profiler):
-        """Test spectrogram with Unix timestamp format (strace)"""
+        """Test heatmap with Unix timestamp format (strace)"""
         import matplotlib.pyplot as plt
 
         operations = [
@@ -163,7 +163,7 @@ class TestSpectrogramGeneration:
             {"type": "read", "bytes": 512, "timestamp": "1234567890.300000"},
             {"type": "write", "bytes": 4096, "timestamp": "1234567890.400000"},
         ]
-        display.generate_spectrogram(operations, 1.0)
+        display.generate_heatmap(operations, 1.0)
 
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -191,7 +191,7 @@ class TestSpectrogramGeneration:
 
     @patch("iops_profiler.display.plt.show")
     def test_fs_usage_timestamp_format(self, mock_show, profiler):
-        """Test spectrogram with HH:MM:SS.ffffff timestamp format (fs_usage)"""
+        """Test heatmap with HH:MM:SS.ffffff timestamp format (fs_usage)"""
         import matplotlib.pyplot as plt
 
         operations = [
@@ -200,7 +200,7 @@ class TestSpectrogramGeneration:
             {"type": "read", "bytes": 512, "timestamp": "12:34:56.300000"},
             {"type": "write", "bytes": 4096, "timestamp": "12:34:56.400000"},
         ]
-        display.generate_spectrogram(operations, 1.0)
+        display.generate_heatmap(operations, 1.0)
 
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -216,7 +216,7 @@ class TestSpectrogramGeneration:
 
     @patch("iops_profiler.display.plt.show")
     def test_wide_range_of_sizes_over_time(self, mock_show, profiler):
-        """Test spectrogram with wide range of operation sizes over time"""
+        """Test heatmap with wide range of operation sizes over time"""
         import matplotlib.pyplot as plt
 
         operations = []
@@ -227,7 +227,7 @@ class TestSpectrogramGeneration:
             op_type = "read" if i % 2 == 0 else "write"
             operations.append({"type": op_type, "bytes": byte_size, "timestamp": timestamp})
 
-        display.generate_spectrogram(operations, 1.0)
+        display.generate_heatmap(operations, 1.0)
 
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -243,7 +243,7 @@ class TestSpectrogramGeneration:
 
     @patch("iops_profiler.display.plt.show")
     def test_many_operations_over_time(self, mock_show, profiler):
-        """Test spectrogram with many operations"""
+        """Test heatmap with many operations"""
         import matplotlib.pyplot as plt
 
         operations = []
@@ -254,7 +254,7 @@ class TestSpectrogramGeneration:
             op_type = "read" if i % 2 == 0 else "write"
             operations.append({"type": op_type, "bytes": byte_size, "timestamp": timestamp})
 
-        display.generate_spectrogram(operations, 10.0)
+        display.generate_heatmap(operations, 10.0)
 
         # plt.show should be called once
         mock_show.assert_called_once()
@@ -265,19 +265,19 @@ class TestSpectrogramGeneration:
 
     @patch("iops_profiler.display.plt.show")
     def test_operations_with_zero_bytes_ignored(self, mock_show, profiler):
-        """Test that operations with zero bytes are ignored in spectrogram"""
+        """Test that operations with zero bytes are ignored in heatmap"""
         operations = [
             {"type": "read", "bytes": 0, "timestamp": "1234567890.100000"},
             {"type": "write", "bytes": 2048, "timestamp": "1234567890.200000"},
             {"type": "read", "bytes": 0, "timestamp": "1234567890.300000"},
         ]
-        display.generate_spectrogram(operations, 1.0)
+        display.generate_heatmap(operations, 1.0)
 
         # Should still create a plot (has one non-zero operation)
         mock_show.assert_called_once()
 
     def test_no_matplotlib_installed(self, profiler):
-        """Test spectrogram generation when matplotlib is not available"""
+        """Test heatmap generation when matplotlib is not available"""
         from iops_profiler import display
 
         original_plt = display.plt
@@ -288,13 +288,13 @@ class TestSpectrogramGeneration:
         try:
             operations = [{"type": "read", "bytes": 1024, "timestamp": "1234567890.100000"}]
             # Should print warning and return early
-            display.generate_spectrogram(operations, 1.0)
+            display.generate_heatmap(operations, 1.0)
         finally:
             # Restore original plt
             display.plt = original_plt
 
     def test_no_numpy_installed(self, profiler):
-        """Test spectrogram generation when numpy is not available"""
+        """Test heatmap generation when numpy is not available"""
         from iops_profiler import display
 
         original_np = display.np
@@ -305,15 +305,15 @@ class TestSpectrogramGeneration:
         try:
             operations = [{"type": "read", "bytes": 1024, "timestamp": "1234567890.100000"}]
             # Should print warning and return early
-            display.generate_spectrogram(operations, 1.0)
+            display.generate_heatmap(operations, 1.0)
         finally:
             # Restore original np
             display.np = original_np
 
     @patch("iops_profiler.display.plt")
     @patch("iops_profiler.display.np")
-    def test_spectrogram_saves_to_file_in_terminal(self, mock_np, mock_plt, profiler, capsys):
-        """Test spectrogram saves to file in terminal mode"""
+    def test_heatmap_saves_to_file_in_terminal(self, mock_np, mock_plt, profiler, capsys):
+        """Test heatmap saves to file in terminal mode"""
         import numpy as np
 
         mock_np.histogram2d = np.histogram2d
@@ -336,10 +336,10 @@ class TestSpectrogramGeneration:
 
         # Test terminal mode - saves to file
         with patch("iops_profiler.display.is_notebook_environment", return_value=False):
-            display.generate_spectrogram(operations, 1.0)
+            display.generate_heatmap(operations, 1.0)
 
         mock_plt.savefig.assert_called_once()
         mock_plt.show.assert_not_called()
         mock_plt.close.assert_called_once_with(mock_fig)
         captured = capsys.readouterr()
-        assert "iops_spectrogram.png" in captured.out
+        assert "iops_heatmap.png" in captured.out

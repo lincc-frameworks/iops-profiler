@@ -137,13 +137,13 @@ When enabled, two histogram charts are displayed alongside the results table:
 
 Both charts display separate lines for reads, writes, and all operations combined, making it easy to identify patterns in your code's I/O behavior.
 
-### Spectrogram Visualization
+### Heatmap Visualization
 
-Use the `--spectrogram` flag to visualize I/O operations as a time-series heatmap (available for `strace` and `fs_usage` measurement modes):
+Use the `--heatmap` flag to visualize I/O operations as a time-series heatmap (available for `strace` and `fs_usage` measurement modes):
 
 **Example - Visualizing I/O patterns over time:**
 ```python
-%%iops --spectrogram
+%%iops --heatmap
 import tempfile
 import os
 import time
@@ -169,11 +169,11 @@ finally:
         shutil.rmtree(test_dir)
 ```
 
-When enabled, two spectrogram heatmaps are displayed alongside the results table:
+When enabled, two heatmap heatmaps are displayed alongside the results table:
 1. **Operation Count Over Time**: Shows when I/O operations of different sizes occurred (X-axis: time, Y-axis: operation size in log scale, Color: operation count)
 2. **Total Bytes Over Time**: Shows data transfer patterns over time (X-axis: time, Y-axis: operation size in log scale, Color: total bytes)
 
-The spectrogram visualization helps identify:
+The heatmap visualization helps identify:
 - Temporal patterns in I/O behavior
 - When different I/O sizes occur during execution
 - Bursts or gaps in I/O activity
@@ -189,8 +189,8 @@ The spectrogram visualization helps identify:
 - Python 3.10+
 - IPython/Jupyter
 - psutil
-- matplotlib (for histogram and spectrogram visualization)
-- numpy (for histogram and spectrogram visualization)
+- matplotlib (for histogram and heatmap visualization)
+- numpy (for histogram and heatmap visualization)
 
 ## Dev Guide - Getting Started
 

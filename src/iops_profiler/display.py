@@ -17,11 +17,11 @@ except ImportError:
 
 from IPython.display import HTML, display
 
-# Constants for spectrogram generation
-SPECTROGRAM_SIZE_BIN_EXPANSION = 0.01  # 1% expansion for size bins (0.99 to 1.01)
-SPECTROGRAM_SINGLE_VALUE_EXPANSION = 0.1  # 10% expansion for single value (0.9 to 1.1)
-SPECTROGRAM_SIZE_BINS = 30  # Number of bins for operation size (log scale)
-SPECTROGRAM_TIME_BINS = 50  # Number of bins for time
+# Constants for heatmap generation
+HEATMAP_SIZE_BIN_EXPANSION = 0.01  # 1% expansion for size bins (0.99 to 1.01)
+HEATMAP_SINGLE_VALUE_EXPANSION = 0.1  # 10% expansion for single value (0.9 to 1.1)
+HEATMAP_SIZE_BINS = 30  # Number of bins for operation size (log scale)
+HEATMAP_TIME_BINS = 50  # Number of bins for time
 
 
 def is_notebook_environment():
@@ -62,26 +62,49 @@ def format_bytes(bytes_val):
     return f"{bytes_val:.2f} TB"
 
 
-def generate_spectrogram(operations, elapsed_time):
-    """Generate spectrogram-like heatmaps for I/O operations over time
+def format_time_axis(max_time_seconds):
+    """Determine appropriate time unit and formatting for axis display.
+
+    Args:
+        max_time_seconds: Maximum time value in seconds
+
+    Returns:
+        tuple: (time_unit_name, time_divisor, decimal_places)
+    """
+    if max_time_seconds >= 1.0:
+        # Use seconds
+        return "s", 1.0, 2
+    elif max_time_seconds >= 0.001:
+        # Use milliseconds
+        return "ms", 0.001, 1
+    elif max_time_seconds >= 0.000001:
+        # Use microseconds
+        return "μs", 0.000001, 1
+    else:
+        # Use nanoseconds
+        return "ns", 0.000000001, 0
+
+
+def generate_heatmap(operations, elapsed_time):
+    """Generate time-series heatmaps for I/O operations over time
 
     Args:
         operations: List of dicts with 'type', 'bytes', and 'timestamp' keys
         elapsed_time: Total elapsed time of the profiled code
     """
     if not plt or not np:
-        print("⚠️ matplotlib or numpy not available. Cannot generate spectrograms.")
+        print("⚠️ matplotlib or numpy not available. Cannot generate heatmaps.")
         return
 
     if not operations:
-        print("⚠️ No operations captured for spectrogram generation.")
+        print("⚠️ No operations captured for heatmap generation.")
         return
 
     # Filter operations with timestamps and non-zero bytes
     ops_with_time = [op for op in operations if "timestamp" in op and op["bytes"] > 0]
 
     if not ops_with_time:
-        print("⚠️ No operations with timestamps for spectrogram generation.")
+        print("⚠️ No operations with timestamps for heatmap generation.")
         return
 
     # Convert timestamps to relative time (seconds from start)
@@ -113,7 +136,7 @@ def generate_spectrogram(operations, elapsed_time):
 
     # Handle case where no valid timestamps were extracted
     if not relative_times:
-        print("⚠️ Could not parse timestamps for spectrogram generation.")
+        print("⚠️ Could not parse timestamps for heatmap generation.")
         return
 
     # Extract byte sizes
@@ -125,22 +148,25 @@ def generate_spectrogram(operations, elapsed_time):
 
     if min_bytes == max_bytes:
         # Single value case: expand range to create meaningful bins
-        expansion_factor = 1 - SPECTROGRAM_SINGLE_VALUE_EXPANSION
+        expansion_factor = 1 - HEATMAP_SINGLE_VALUE_EXPANSION
         size_bins = np.array([min_bytes * expansion_factor, min_bytes / expansion_factor])
     else:
-        # Create bins in log space - using fewer bins for spectrogram
-        expansion_factor = 1 - SPECTROGRAM_SIZE_BIN_EXPANSION
+        # Create bins in log space - using fewer bins for heatmap
+        expansion_factor = 1 - HEATMAP_SIZE_BIN_EXPANSION
         size_bins = np.logspace(
             np.log10(min_bytes * expansion_factor),
             np.log10(max_bytes / expansion_factor),
-            SPECTROGRAM_SIZE_BINS,
+            HEATMAP_SIZE_BINS,
         )
 
     # Create time bins
     max_time = max(relative_times)
     if max_time == 0:
         max_time = elapsed_time
-    time_bins = np.linspace(0, max_time, SPECTROGRAM_TIME_BINS)
+    time_bins = np.linspace(0, max_time, HEATMAP_TIME_BINS)
+
+    # Determine appropriate time unit and formatting for axis
+    time_unit, time_divisor, decimal_places = format_time_axis(max_time)
 
     # Create 2D histograms for operation counts
     all_count_hist, time_edges, size_edges = np.histogram2d(
@@ -155,19 +181,23 @@ def generate_spectrogram(operations, elapsed_time):
     # Create figure with 2 subplots (operation count and total bytes)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
-    # Plot 1: Operation count spectrogram
+    # Plot 1: Operation count heatmap
     # Use pcolormesh for heatmap visualization
     time_centers = (time_edges[:-1] + time_edges[1:]) / 2
     size_centers = (size_edges[:-1] + size_edges[1:]) / 2
-    time_mesh, size_mesh = np.meshgrid(time_centers, size_centers)
+    # Convert time to appropriate unit for display
+    time_mesh, size_mesh = np.meshgrid(time_centers / time_divisor, size_centers)
 
     im1 = ax1.pcolormesh(time_mesh, size_mesh, all_count_hist.T, cmap="viridis", shading="auto")
     ax1.set_yscale("log")
-    ax1.set_xlabel("Time (seconds)")
+    ax1.set_xlabel(f"Time ({time_unit})")
     ax1.set_ylabel("Operation Size (bytes, log scale)")
     ax1.set_title("I/O Operation Count Over Time")
     plt.colorbar(im1, ax=ax1, label="Number of Operations")
     ax1.grid(True, alpha=0.3)
+
+    # Format x-axis tick labels with limited decimal places
+    ax1.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:.{decimal_places}f}'))
 
     # Plot 2: Total bytes spectrogram (with auto-scaling)
     max_bytes_in_bin = np.max(all_bytes_hist) if all_bytes_hist.size > 0 else 0
@@ -184,11 +214,14 @@ def generate_spectrogram(operations, elapsed_time):
 
     im2 = ax2.pcolormesh(time_mesh, size_mesh, (all_bytes_hist / divisor).T, cmap="plasma", shading="auto")
     ax2.set_yscale("log")
-    ax2.set_xlabel("Time (seconds)")
+    ax2.set_xlabel(f"Time ({time_unit})")
     ax2.set_ylabel("Operation Size (bytes, log scale)")
     ax2.set_title("I/O Total Bytes Over Time")
     plt.colorbar(im2, ax=ax2, label=f"Total Bytes ({unit})")
     ax2.grid(True, alpha=0.3)
+
+    # Format x-axis tick labels with limited decimal places
+    ax2.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:.{decimal_places}f}'))
 
     plt.tight_layout()
 
@@ -198,10 +231,10 @@ def generate_spectrogram(operations, elapsed_time):
         plt.show()
     else:
         # In plain IPython, save to file
-        output_file = "iops_spectrogram.png"
+        output_file = "iops_heatmap.png"
         plt.savefig(output_file, dpi=100, bbox_inches="tight")
         plt.close(fig)
-        print(f"📊 Spectrogram saved to: {output_file}")
+        print(f"📊 Heatmap saved to: {output_file}")
 
 
 def generate_histograms(operations):

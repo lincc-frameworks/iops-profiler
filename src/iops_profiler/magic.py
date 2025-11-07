@@ -30,20 +30,20 @@ class IOPSProfiler(Magics):
         # Initialize the collector with shell context
         self.collector = Collector(shell)
 
-    def _profile_code(self, code, show_histogram=False, show_spectrogram=False):
+    def _profile_code(self, code, show_histogram=False, show_heatmap=False):
         """
         Internal method to profile code with I/O measurements.
 
         Args:
             code: The code string to profile
             show_histogram: Whether to generate histograms
-            show_spectrogram: Whether to generate spectrogram
+            show_heatmap: Whether to generate time-series heatmap
 
         Returns:
             Dictionary with profiling results
         """
         # Determine if we should collect individual operations
-        collect_ops = show_histogram or show_spectrogram
+        collect_ops = show_histogram or show_heatmap
 
         # Determine measurement method based on platform
         if self.platform == "darwin":  # macOS
@@ -56,16 +56,16 @@ class IOPSProfiler(Magics):
                     results = self.collector.measure_systemwide_fallback(code)
                     if show_histogram:
                         print("⚠️ Histograms not available for system-wide measurement mode.")
-                    if show_spectrogram:
-                        print("⚠️ Spectrograms not available for system-wide measurement mode.")
+                    if show_heatmap:
+                        print("⚠️ Heatmaps not available for system-wide measurement mode.")
                 else:
                     print(f"⚠️ Could not start fs_usage: {e}")
                     print("Falling back to system-wide measurement.\n")
                     results = self.collector.measure_systemwide_fallback(code)
                     if show_histogram:
                         print("⚠️ Histograms not available for system-wide measurement mode.")
-                    if show_spectrogram:
-                        print("⚠️ Spectrograms not available for system-wide measurement mode.")
+                    if show_heatmap:
+                        print("⚠️ Heatmaps not available for system-wide measurement mode.")
 
         elif self.platform in ("linux", "linux2"):
             # Use strace on Linux (no elevated privileges required)
@@ -77,15 +77,15 @@ class IOPSProfiler(Magics):
                 results = self.collector.measure_linux_windows(code)
                 if show_histogram:
                     print("⚠️ Histograms not available for psutil measurement mode.")
-                if show_spectrogram:
-                    print("⚠️ Spectrograms not available for psutil measurement mode.")
+                if show_heatmap:
+                    print("⚠️ Heatmaps not available for psutil measurement mode.")
 
         elif self.platform == "win32":
             results = self.collector.measure_linux_windows(code)
             if show_histogram:
                 print("⚠️ Histograms not available for psutil measurement mode on Windows.")
-            if show_spectrogram:
-                print("⚠️ Spectrograms not available for psutil measurement mode on Windows.")
+            if show_heatmap:
+                print("⚠️ Heatmaps not available for psutil measurement mode on Windows.")
 
         else:
             print(f"⚠️ Platform '{self.platform}' not fully supported.")
@@ -93,8 +93,8 @@ class IOPSProfiler(Magics):
             results = self.collector.measure_systemwide_fallback(code)
             if show_histogram:
                 print("⚠️ Histograms not available for system-wide measurement mode.")
-            if show_spectrogram:
-                print("⚠️ Spectrograms not available for system-wide measurement mode.")
+            if show_heatmap:
+                print("⚠️ Heatmaps not available for system-wide measurement mode.")
 
         return results
 
@@ -106,7 +106,7 @@ class IOPSProfiler(Magics):
         Line magic usage (single line):
             %iops open('test.txt', 'w').write('data')
             %iops --histogram open('test.txt', 'w').write('data')
-            %iops --spectrogram open('test.txt', 'w').write('data')
+            %iops --heatmap open('test.txt', 'w').write('data')
 
         Cell magic usage (multiple lines):
             %%iops
@@ -119,15 +119,15 @@ class IOPSProfiler(Magics):
             with open('test.txt', 'w') as f:
                 f.write('data')
 
-            %%iops --spectrogram
-            # Your code here (with spectrogram)
+            %%iops --heatmap
+            # Your code here (with time-series heatmap)
             with open('test.txt', 'w') as f:
                 f.write('data')
         """
         try:
             # Parse command line arguments
             show_histogram = False
-            show_spectrogram = False
+            show_heatmap = False
             code = None
 
             # Determine what code to execute
@@ -137,24 +137,24 @@ class IOPSProfiler(Magics):
                 if line_stripped == "--histogram" or line_stripped.startswith("--histogram "):
                     show_histogram = True
                     code = line_stripped[len("--histogram") :].strip()
-                elif line_stripped == "--spectrogram" or line_stripped.startswith("--spectrogram "):
-                    show_spectrogram = True
-                    code = line_stripped[len("--spectrogram") :].strip()
+                elif line_stripped == "--heatmap" or line_stripped.startswith("--heatmap "):
+                    show_heatmap = True
+                    code = line_stripped[len("--heatmap") :].strip()
                 else:
                     code = line_stripped
 
                 if not code:
                     print("❌ Error: No code provided to profile in line magic mode.")
-                    print("   Usage: %iops [--histogram|--spectrogram] <code>")
+                    print("   Usage: %iops [--histogram|--heatmap] <code>")
                     return
             else:
                 # Cell magic mode - code is in the cell parameter
                 show_histogram = "--histogram" in line
-                show_spectrogram = "--spectrogram" in line
+                show_heatmap = "--heatmap" in line
                 code = cell
 
             # Profile the code
-            results = self._profile_code(code, show_histogram, show_spectrogram)
+            results = self._profile_code(code, show_histogram, show_heatmap)
 
             # Display results table
             display.display_results(results)
@@ -163,9 +163,9 @@ class IOPSProfiler(Magics):
             if show_histogram and "operations" in results:
                 display.generate_histograms(results["operations"])
 
-            # Display spectrogram if requested and available
-            if show_spectrogram and "operations" in results:
-                display.generate_spectrogram(results["operations"], results["elapsed_time"])
+            # Display heatmap if requested and available
+            if show_heatmap and "operations" in results:
+                display.generate_heatmap(results["operations"], results["elapsed_time"])
 
         except Exception as e:
             print(f"❌ Error during IOPS profiling: {e}")
