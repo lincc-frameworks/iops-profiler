@@ -2,6 +2,8 @@
 
 A Jupyter IPython magic extension for measuring I/O operations per second (IOPS) in your code.
 
+[![Documentation Status](https://readthedocs.org/projects/iops-profiler/badge/?version=latest)](https://iops-profiler.readthedocs.io/en/latest/?badge=latest)
+
 ## Installation
 
 You can install `iops-profiler` directly from PyPI (once published):
@@ -17,6 +19,17 @@ git clone https://github.com/lincc-frameworks/iops-profiler.git
 cd iops-profiler
 pip install -e .
 ```
+
+## Documentation
+
+📚 **[Read the full documentation on Read the Docs](https://iops-profiler.readthedocs.io/)**
+
+The documentation includes:
+- Comprehensive user guide
+- Example notebooks with hands-on tutorials
+- Platform-specific notes (Linux, macOS, Windows)
+- Troubleshooting guide
+- API reference
 
 ## Usage
 
@@ -51,6 +64,15 @@ The extension will display a table showing:
 - Bytes read/written
 - IOPS (operations per second)
 - Throughput (bytes per second)
+
+### Example Notebooks
+
+Check out our example notebooks for hands-on learning:
+
+- **[Basic Usage](https://iops-profiler.readthedocs.io/en/latest/notebooks/basic_usage.html)** - Learn the fundamentals of line and cell magic
+- **[Histogram Visualization](https://iops-profiler.readthedocs.io/en/latest/notebooks/histogram_visualization.html)** - Visualize I/O operation distributions
+
+You can also find the notebook files in the [`docs/notebooks/`](docs/notebooks/) directory.
 
 ### Histogram Visualization
 
