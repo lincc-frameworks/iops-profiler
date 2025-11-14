@@ -2,6 +2,8 @@
 
 A Jupyter IPython magic extension for measuring I/O operations per second (IOPS) in your code.
 
+![iops-profiler in action](https://github.com/user-attachments/assets/a38d3f1a-183e-41b8-a05b-4c95961a0b37)
+
 [![Documentation Status](https://readthedocs.org/projects/iops-profiler/badge/?version=latest)](https://iops-profiler.readthedocs.io/en/latest/?badge=latest)
 
 ## Installation
