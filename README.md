@@ -4,11 +4,19 @@ A Jupyter IPython magic extension for measuring I/O operations per second (IOPS)
 
 ![iops-profiler in action](images/demo_screenshot.png)
 
+[![PyPI version](https://badge.fury.io/py/iops-profiler.svg)](https://badge.fury.io/py/iops-profiler)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Documentation Status](https://readthedocs.org/projects/iops-profiler/badge/?version=latest)](https://iops-profiler.readthedocs.io/en/latest/?badge=latest)
+
+## Why?
+
+While working with large astronomy datasets at LINCC-Frameworks, we kept hitting mysterious performance bottlenecks. Traditional profilers showed CPU time was fine, but our pipelines were crawling. Turns out, we were thrashing the disk with small random I/O operations.
+
+We needed a way to see I/O patterns directly in our Jupyter notebooks without context-switching to system monitoring tools. That's why we built iops-profiler.
 
 ## Installation
 
-You can install `iops-profiler` directly from PyPI (once published):
+You can install `iops-profiler` directly from PyPI:
 
 ```bash
 pip install iops-profiler
@@ -22,6 +30,13 @@ cd iops-profiler
 pip install -e .
 ```
 
+## Use Cases
+
+- **Debugging slow data pipelines**: Identify if you're reading too many small files vs. fewer large ones
+- **Optimizing database exports**: See real-time I/O patterns when writing CSVs or Parquet files
+- **Benchmarking storage backends**: Compare local disk vs. network filesystems
+- **Understanding pandas/polars operations**: Profile what's actually hitting disk during DataFrame operations
+
 ## Documentation
 
 📚 **[Read the full documentation on Read the Docs](https://iops-profiler.readthedocs.io/)**
@@ -33,7 +48,7 @@ The documentation includes:
 - Troubleshooting guide
 - API reference
 
-## Usage
+## Quick Start
 
 Load the extension in your Jupyter notebook:
 
@@ -47,6 +62,14 @@ Use the `%iops` line magic to profile a single line of code:
 
 ```python
 %iops open('test.txt', 'w').write('Hello World' * 1000)
+```
+
+**Output:**
+```
+Execution Time: 0.002s
+Read Ops: 0 | Write Ops: 3 | Total: 3
+Bytes Read: 0 | Bytes Written: 11000
+IOPS: 1500.0 | Throughput: 5.50 MB/s
 ```
 
 ### Cell Magic Mode
