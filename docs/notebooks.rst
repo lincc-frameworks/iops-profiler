@@ -9,6 +9,7 @@ These Jupyter notebooks demonstrate the key features of iops-profiler with pract
 
    notebooks/basic_usage
    notebooks/histogram_visualization
+   notebooks/heatmap_visualization
 
 Running the Notebooks
 ---------------------
@@ -71,6 +72,24 @@ Explore the histogram feature for visualizing I/O patterns:
 **Recommended for:** Users who want to understand and optimize I/O operation distributions.
 
 **Note:** Histogram mode is available on Linux and macOS, but not Windows.
+
+Time-Series Heatmap Visualization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:doc:`notebooks/heatmap_visualization`
+
+Explore the heatmap feature for visualizing I/O patterns over time:
+
+- Enabling heatmap mode with ``--heatmap``
+- Understanding when operations of different sizes occur
+- Analyzing temporal I/O patterns and bursts
+- Identifying phases of different I/O behavior
+- Comparing heatmap with histogram views
+- Real-world temporal analysis examples
+
+**Recommended for:** Users who want to understand how I/O behavior changes during program execution.
+
+**Note:** Heatmap mode is available on Linux (with strace) and macOS (with fs_usage), but not Windows.
 
 Additional Resources
 --------------------

@@ -162,6 +162,48 @@ When enabled, two histogram charts are displayed alongside the results table:
 
 Both charts display separate lines for reads, writes, and all operations combined, making it easy to identify patterns in your code's I/O behavior.
 
+### Heatmap Visualization
+
+Use the `--heatmap` flag to visualize I/O operations as a time-series heatmap (available for `strace` and `fs_usage` measurement modes):
+
+**Example - Visualizing I/O patterns over time:**
+```python
+%%iops --heatmap
+import tempfile
+import os
+import time
+
+test_dir = tempfile.mkdtemp()
+
+try:
+    # Phase 1: Small writes over time
+    for i in range(5):
+        with open(os.path.join(test_dir, f'small_{i}.txt'), 'w') as f:
+            f.write('x' * 1024)  # 1 KB
+        time.sleep(0.05)
+    
+    # Phase 2: Large writes over time
+    for i in range(5):
+        with open(os.path.join(test_dir, f'large_{i}.txt'), 'w') as f:
+            f.write('z' * (100 * 1024))  # 100 KB
+        time.sleep(0.05)
+
+finally:
+    import shutil
+    if os.path.exists(test_dir):
+        shutil.rmtree(test_dir)
+```
+
+When enabled, two heatmap heatmaps are displayed alongside the results table:
+1. **Operation Count Over Time**: Shows when I/O operations of different sizes occurred (X-axis: time, Y-axis: operation size in log scale, Color: operation count)
+2. **Total Bytes Over Time**: Shows data transfer patterns over time (X-axis: time, Y-axis: operation size in log scale, Color: total bytes)
+
+The heatmap visualization helps identify:
+- Temporal patterns in I/O behavior
+- When different I/O sizes occur during execution
+- Bursts or gaps in I/O activity
+- Correlation between application phases and I/O patterns
+
 ## Platform Support
 
 - **Linux/Windows**: Uses `psutil` for per-process I/O tracking
@@ -172,8 +214,8 @@ Both charts display separate lines for reads, writes, and all operations combine
 - Python 3.10+
 - IPython/Jupyter
 - psutil
-- matplotlib (for histogram visualization)
-- numpy (for histogram visualization)
+- matplotlib (for histogram and heatmap visualization)
+- numpy (for histogram and heatmap visualization)
 
 ## Dev Guide - Getting Started
 
