@@ -24,7 +24,12 @@ version = ".".join(release.split(".")[:2])
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["sphinx.ext.mathjax", "sphinx.ext.napoleon", "sphinx.ext.viewcode"]
+extensions = [
+    "sphinx.ext.mathjax",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
+    "nbsphinx",  # For executing and rendering Jupyter notebooks
+]
 
 extensions.append("autoapi.extension")
 extensions.append("nbsphinx")
@@ -60,5 +65,13 @@ autoapi_dirs = ["../src"]
 autoapi_ignore = ["*/__main__.py", "*/_version.py"]
 autoapi_add_toc_tree_entry = False
 autoapi_member_order = "bysource"
+
+# -- nbsphinx configuration -------------------------------------------------
+# Execute notebooks before conversion
+nbsphinx_execute = "always"
+# Allow errors in notebook execution (for documentation purposes)
+nbsphinx_allow_errors = True
+# Timeout for notebook execution (in seconds)
+nbsphinx_timeout = 600
 
 html_theme = "sphinx_rtd_theme"
