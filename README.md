@@ -106,6 +106,8 @@ In the next cell:
 iops_detailed_data  # Returns a pandas DataFrame or a message
 ```
 
+> **Note:** The `iops_detailed_data` variable is automatically created/updated in your namespace after each `%%iops` execution. Avoid using this variable name in your own code to prevent conflicts.
+
 **When detailed data is available** (Linux with strace, macOS with fs_usage):
 - `iops_detailed_data` is a pandas DataFrame with columns:
   - `path` (str): File path accessed

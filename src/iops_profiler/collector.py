@@ -335,6 +335,7 @@ exit 0
             if os.path.exists(output_file):
                 with open(output_file, "r") as f:
                     for line in f:
+                        # Collect detailed data if requested
                         if collect_detailed:
                             detail = self.parse_fs_usage_line(line, collect_detailed=True)
                             if detail:
@@ -346,17 +347,23 @@ exit 0
                                 elif detail["operation"] == "write":
                                     write_count += 1
                                     write_bytes += detail["size_bytes"]
-                        elif collect_ops:
+
+                        # Collect histogram operations if requested (can happen alongside detailed)
+                        if collect_ops:
                             op = self.parse_fs_usage_line(line, collect_ops=True)
                             if op:
                                 operations.append(op)
-                                if op["type"] == "read":
-                                    read_count += 1
-                                    read_bytes += op["bytes"]
-                                elif op["type"] == "write":
-                                    write_count += 1
-                                    write_bytes += op["bytes"]
-                        else:
+                                # Only update counts if we're not already tracking via detailed
+                                if not collect_detailed:
+                                    if op["type"] == "read":
+                                        read_count += 1
+                                        read_bytes += op["bytes"]
+                                    elif op["type"] == "write":
+                                        write_count += 1
+                                        write_bytes += op["bytes"]
+
+                        # Fallback: neither detailed nor ops collection
+                        if not collect_detailed and not collect_ops:
                             op_type, bytes_transferred = self.parse_fs_usage_line(line)
                             if op_type == "read":
                                 read_count += 1
@@ -489,6 +496,7 @@ exit 0
                 try:
                     with open(output_file, "r", errors="ignore") as f:
                         for line in f:
+                            # Collect detailed data if requested
                             if collect_detailed:
                                 detail = self.parse_strace_line(line, collect_detailed=True)
                                 if detail:
@@ -500,17 +508,23 @@ exit 0
                                     elif detail["operation"] == "write":
                                         write_count += 1
                                         write_bytes += detail["size_bytes"]
-                            elif collect_ops:
+
+                            # Collect histogram operations if requested (can happen alongside detailed)
+                            if collect_ops:
                                 op = self.parse_strace_line(line, collect_ops=True)
                                 if op:
                                     operations.append(op)
-                                    if op["type"] == "read":
-                                        read_count += 1
-                                        read_bytes += op["bytes"]
-                                    elif op["type"] == "write":
-                                        write_count += 1
-                                        write_bytes += op["bytes"]
-                            else:
+                                    # Only update counts if we're not already tracking via detailed
+                                    if not collect_detailed:
+                                        if op["type"] == "read":
+                                            read_count += 1
+                                            read_bytes += op["bytes"]
+                                        elif op["type"] == "write":
+                                            write_count += 1
+                                            write_bytes += op["bytes"]
+
+                            # Fallback: neither detailed nor ops collection
+                            if not collect_detailed and not collect_ops:
                                 op_type, bytes_transferred = self.parse_strace_line(line)
                                 if op_type == "read":
                                     read_count += 1
