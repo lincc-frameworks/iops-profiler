@@ -62,8 +62,9 @@ class Collector:
         self._strace_pattern = re.compile(r"^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)")
         # Pattern matches: B=0x[hex] in fs_usage output
         self._fs_usage_byte_pattern = re.compile(FS_USAGE_BYTE_PATTERN)
-        # Set of syscall names for I/O operations (lowercase)
-        self._io_syscalls = set(STRACE_IO_SYSCALLS)
+        # Set of syscall names for I/O operations (lowercase) - includes 32-bit variants
+        self._io_syscalls = set(STRACE_IO_SYSCALLS + ["pread", "pwrite"])
+
 
     @staticmethod
     def parse_fs_usage_line_static(line, byte_pattern=None, collect_ops=False):
@@ -380,8 +381,9 @@ exit 0
         output_file = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False).name  # noqa: SIM115
 
         try:
-            # Start strace in the background
-            syscalls_to_trace = ",".join(STRACE_IO_SYSCALLS)
+            # Try with all syscalls first, including 32-bit variants
+            syscalls_to_try = STRACE_IO_SYSCALLS + ["pread", "pwrite"]
+            syscalls_to_trace = ",".join(syscalls_to_try)
             strace_cmd = [
                 "strace",
                 "-f",  # Follow forks
@@ -408,7 +410,28 @@ exit 0
                     raise RuntimeError(
                         "strace failed - ptrace not permitted. This may be due to kernel security settings."
                     )
-                raise RuntimeError(f"Failed to start strace: {stderr}")
+                # If it failed due to invalid syscall, retry without 32-bit variants
+                if "invalid system call" in stderr:
+                    syscalls_to_trace = ",".join(STRACE_IO_SYSCALLS)
+                    strace_cmd = [
+                        "strace",
+                        "-f",
+                        "-e",
+                        f"trace={syscalls_to_trace}",
+                        "-o",
+                        output_file,
+                        "-p",
+                        str(pid),
+                    ]
+                    strace_proc = subprocess.Popen(
+                        strace_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                    )
+                    time.sleep(STRACE_ATTACH_DELAY)
+                    if strace_proc.poll() is not None:
+                        stdout, stderr = strace_proc.communicate()
+                        raise RuntimeError(f"Failed to start strace: {stderr}")
+                else:
+                    raise RuntimeError(f"Failed to start strace: {stderr}")
 
             # Execute the code
             start_time = time.time()
