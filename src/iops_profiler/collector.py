@@ -62,8 +62,12 @@ class Collector:
         self._strace_pattern = re.compile(r"^\s*(\d+)\s+(\w+)\([^)]+\)\s*=\s*(-?\d+)")
         # Pattern matches: B=0x[hex] in fs_usage output
         self._fs_usage_byte_pattern = re.compile(FS_USAGE_BYTE_PATTERN)
-        # Set of syscall names for I/O operations (lowercase) - includes 32-bit variants
+        # Set of syscall names for I/O operations (lowercase)
+        # Includes 32-bit variants (pread, pwrite) for completeness.
+        # Note: On 64-bit systems, these may not be traced (they don't exist),
+        # but including them in the parser is harmless - they simply won't appear in output.
         self._io_syscalls = set(STRACE_IO_SYSCALLS + ["pread", "pwrite"])
+
 
 
     @staticmethod
@@ -414,9 +418,11 @@ exit 0
                 # If it failed due to invalid syscall, retry without 32-bit variants
                 if "invalid system call" in stderr:
                     strace_proc = _start_strace(STRACE_IO_SYSCALLS)
+                    # Check if retry succeeded
                     if strace_proc.poll() is not None:
                         stdout, stderr = strace_proc.communicate()
-                        raise RuntimeError(f"Failed to start strace: {stderr}")
+                        raise RuntimeError(f"Failed to start strace after retry: {stderr}")
+                    # Retry succeeded - continue with execution
                 else:
                     raise RuntimeError(f"Failed to start strace: {stderr}")
 
