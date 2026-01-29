@@ -61,6 +61,20 @@ class TestStraceLineParsing:
         assert op_type == "write"
         assert bytes_transferred == 512
 
+    def test_pread_operation(self, profiler):
+        """Test parsing a pread operation (32-bit)"""
+        line = '3385  pread(3, "...", 1024, 0) = 1024'
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
+        assert op_type == "read"
+        assert bytes_transferred == 1024
+
+    def test_pwrite_operation(self, profiler):
+        """Test parsing a pwrite operation (32-bit)"""
+        line = '3385  pwrite(4, "data", 512, 1024) = 512'
+        op_type, bytes_transferred = profiler.collector.parse_strace_line(line)
+        assert op_type == "write"
+        assert bytes_transferred == 512
+
     def test_readv_operation(self, profiler):
         """Test parsing a readv (vectored read) operation"""
         line = '3385  readv(5, [{iov_base="...", iov_len=1024}], 1) = 1024'
