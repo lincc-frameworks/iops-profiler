@@ -160,9 +160,11 @@ class IOPSProfiler(Magics):
                     self.shell.user_ns["iops_detailed_data"] = results["detailed_data"]
             else:
                 # No detailed data available (psutil mode or fallback)
-                self.shell.user_ns[
-                    "iops_detailed_data"
-                ] = "Detailed I/O data not available: profiling uses psutil mode which only provides aggregate metrics"
+                message = (
+                    "Detailed I/O data not available: profiling uses psutil mode "
+                    "which only provides aggregate metrics"
+                )
+                self.shell.user_ns["iops_detailed_data"] = message
 
         except Exception as e:
             print(f"❌ Error during IOPS profiling: {e}")

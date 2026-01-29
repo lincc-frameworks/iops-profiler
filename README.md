@@ -90,6 +90,32 @@ The extension will display a table showing:
 - IOPS (operations per second)
 - Throughput (bytes per second)
 
+### Accessing Detailed I/O Data
+
+After running `%%iops`, you can access detailed I/O operation data via the `iops_detailed_data` variable:
+
+```python
+%%iops
+with open('test.txt', 'w') as f:
+    f.write('data')
+```
+
+In the next cell:
+```python
+# Access the detailed I/O data
+iops_detailed_data  # Returns a pandas DataFrame or a message
+```
+
+**When detailed data is available** (Linux with strace, macOS with fs_usage):
+- `iops_detailed_data` is a pandas DataFrame with columns:
+  - `path` (str): File path accessed
+  - `operation` (str): "read" or "write"
+  - `syscall` (str): Syscall name (e.g., "read", "write", "pread64")
+  - `size_bytes` (int): Bytes transferred in the operation
+
+**When detailed data is NOT available** (Windows, or fallback modes):
+- `iops_detailed_data` is a string message explaining that detailed data is not available in the current profiling mode
+
 ### Example Notebooks
 
 Check out our example notebooks for hands-on learning:

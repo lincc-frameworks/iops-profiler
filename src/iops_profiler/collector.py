@@ -121,10 +121,14 @@ class Collector:
 
         This is a convenience wrapper that uses the instance's compiled byte pattern.
         """
-        return self.parse_fs_usage_line_static(line, self._fs_usage_byte_pattern, collect_ops, collect_detailed)
+        return self.parse_fs_usage_line_static(
+            line, self._fs_usage_byte_pattern, collect_ops, collect_detailed
+        )
 
     @staticmethod
-    def parse_strace_line_static(line, strace_pattern, io_syscalls, collect_ops=False, collect_detailed=False):
+    def parse_strace_line_static(
+        line, strace_pattern, io_syscalls, collect_ops=False, collect_detailed=False
+    ):
         """Parse a single strace output line for I/O operations (static version)
 
         Example strace lines:

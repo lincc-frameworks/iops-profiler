@@ -84,6 +84,66 @@ Performance Metrics
 Advanced Features
 -----------------
 
+Accessing Detailed I/O Data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+After running ``%%iops``, you can access detailed information about each I/O operation via the ``iops_detailed_data`` variable that is automatically injected into your namespace.
+
+**Basic Usage:**
+
+.. code-block:: python
+
+   %%iops
+   with open('test.txt', 'w') as f:
+       f.write('data')
+
+In the next cell, you can access the detailed data:
+
+.. code-block:: python
+
+   # Access the detailed I/O data
+   iops_detailed_data
+
+**When detailed data is available** (Linux with strace, macOS with fs_usage):
+
+``iops_detailed_data`` is a pandas DataFrame with the following columns:
+
+- ``path`` (str): File path accessed during the I/O operation
+- ``operation`` (str): Type of operation - either "read" or "write"
+- ``syscall`` (str): The specific system call used (e.g., "read", "write", "pread64", "writev")
+- ``size_bytes`` (int): Number of bytes transferred in the operation
+
+**Example DataFrame:**
+
+.. code-block:: python
+
+   # Example output
+           path operation  syscall  size_bytes
+   0  /tmp/test.txt     write    write        1024
+   1  /tmp/test.txt      read     read        1024
+   2  /tmp/data.bin     write  pwrite64        4096
+
+**When detailed data is NOT available** (Windows, or fallback modes like psutil):
+
+``iops_detailed_data`` is a string message:
+
+.. code-block:: text
+
+   "Detailed I/O data not available: profiling uses psutil mode which only provides aggregate metrics"
+
+This happens when:
+
+- Running on Windows (psutil mode by default)
+- Fallback to psutil mode on Linux (when strace is not available)
+- Fallback to system-wide measurement on macOS (when fs_usage fails)
+
+**Use Cases for Detailed Data:**
+
+1. **Identifying hot files**: Find which files are accessed most frequently
+2. **Analyzing I/O patterns**: See the distribution of read vs write operations per file
+3. **Debugging performance issues**: Identify unexpected I/O to specific files
+4. **Optimizing buffer sizes**: Examine the ``size_bytes`` distribution to tune your I/O strategy
+
 Histogram Visualization
 ~~~~~~~~~~~~~~~~~~~~~~~
 
