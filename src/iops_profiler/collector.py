@@ -380,10 +380,9 @@ exit 0
         # Create temporary file for strace output - we need the name, not file handle
         output_file = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False).name  # noqa: SIM115
 
-        try:
-            # Try with all syscalls first, including 32-bit variants
-            syscalls_to_try = STRACE_IO_SYSCALLS + ["pread", "pwrite"]
-            syscalls_to_trace = ",".join(syscalls_to_try)
+        def _start_strace(syscalls_list):
+            """Helper to start strace with given syscall list"""
+            syscalls_to_trace = ",".join(syscalls_list)
             strace_cmd = [
                 "strace",
                 "-f",  # Follow forks
@@ -394,14 +393,16 @@ exit 0
                 "-p",
                 str(pid),
             ]
-
-            # Start strace process
-            strace_proc = subprocess.Popen(
+            proc = subprocess.Popen(
                 strace_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
-
-            # Give strace a moment to attach
             time.sleep(STRACE_ATTACH_DELAY)
+            return proc
+
+        try:
+            # Try with all syscalls first, including 32-bit variants
+            syscalls_to_try = STRACE_IO_SYSCALLS + ["pread", "pwrite"]
+            strace_proc = _start_strace(syscalls_to_try)
 
             # Check if strace started successfully
             if strace_proc.poll() is not None:
@@ -412,21 +413,7 @@ exit 0
                     )
                 # If it failed due to invalid syscall, retry without 32-bit variants
                 if "invalid system call" in stderr:
-                    syscalls_to_trace = ",".join(STRACE_IO_SYSCALLS)
-                    strace_cmd = [
-                        "strace",
-                        "-f",
-                        "-e",
-                        f"trace={syscalls_to_trace}",
-                        "-o",
-                        output_file,
-                        "-p",
-                        str(pid),
-                    ]
-                    strace_proc = subprocess.Popen(
-                        strace_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                    )
-                    time.sleep(STRACE_ATTACH_DELAY)
+                    strace_proc = _start_strace(STRACE_IO_SYSCALLS)
                     if strace_proc.poll() is not None:
                         stdout, stderr = strace_proc.communicate()
                         raise RuntimeError(f"Failed to start strace: {stderr}")
