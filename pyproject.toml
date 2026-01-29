@@ -28,6 +28,7 @@ dependencies = [
     "psutil",
     "matplotlib",
     "numpy",
+    "pandas",
 ]
 
 [project.urls]

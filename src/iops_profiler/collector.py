@@ -66,28 +66,31 @@ class Collector:
         self._io_syscalls = set(STRACE_IO_SYSCALLS)
 
     @staticmethod
-    def parse_fs_usage_line_static(line, byte_pattern=None, collect_ops=False):
+    def parse_fs_usage_line_static(line, byte_pattern=None, collect_ops=False, collect_detailed=False):
         """Parse a single fs_usage output line for I/O operations (static version)
 
         Args:
             line: The line to parse
             byte_pattern: Compiled regex pattern for extracting byte count (optional)
             collect_ops: If True, return full operation info for histogram collection
+            collect_detailed: If True, return detailed info including path and syscall
 
         Returns:
             If collect_ops is False: (op_type, bytes_transferred)
             If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred}
+            If collect_detailed is True: {'path': str, 'operation': str, 'syscall': str, 'size_bytes': int}
         """
         parts = line.split()
         if len(parts) < 2:
-            return None if collect_ops else (None, 0)
+            return None if (collect_ops or collect_detailed) else (None, 0)
 
-        syscall = parts[1].lower()
+        syscall_raw = parts[1]
+        syscall = syscall_raw.lower()
         is_read = "read" in syscall
         is_write = "write" in syscall
 
         if not (is_read or is_write):
-            return None if collect_ops else (None, 0)
+            return None if (collect_ops or collect_detailed) else (None, 0)
 
         # Extract byte count from B=0x[hex] pattern using compiled regex
         if byte_pattern is None:
@@ -99,25 +102,36 @@ class Collector:
 
         op_type = "read" if is_read else "write"
 
-        if collect_ops:
+        # Extract file path (typically 4th column in fs_usage output)
+        path = parts[3] if len(parts) > 3 else ""
+
+        if collect_detailed:
+            return {
+                "path": path,
+                "operation": op_type,
+                "syscall": syscall_raw,
+                "size_bytes": bytes_transferred,
+            }
+        elif collect_ops:
             return {"type": op_type, "bytes": bytes_transferred}
         return op_type, bytes_transferred
 
-    def parse_fs_usage_line(self, line, collect_ops=False):
+    def parse_fs_usage_line(self, line, collect_ops=False, collect_detailed=False):
         """Parse a single fs_usage output line for I/O operations (instance method)
 
         This is a convenience wrapper that uses the instance's compiled byte pattern.
         """
-        return self.parse_fs_usage_line_static(line, self._fs_usage_byte_pattern, collect_ops)
+        return self.parse_fs_usage_line_static(line, self._fs_usage_byte_pattern, collect_ops, collect_detailed)
 
     @staticmethod
-    def parse_strace_line_static(line, strace_pattern, io_syscalls, collect_ops=False):
+    def parse_strace_line_static(line, strace_pattern, io_syscalls, collect_ops=False, collect_detailed=False):
         """Parse a single strace output line for I/O operations (static version)
 
         Example strace lines:
         3385  write(3, "Hello World...", 1100) = 1100
         3385  read(3, "data", 4096) = 133
         3385  pread64(3, "...", 1024, 0) = 1024
+        3385  read(3</tmp/test.txt>, "data", 4096) = 133  # With -y flag
 
         Note: Lines with <unfinished ...> or <... resumed> are not matched
         as they don't contain complete result information in a single line.
@@ -127,22 +141,24 @@ class Collector:
             strace_pattern: Compiled regex pattern for strace output
             io_syscalls: Set of I/O syscall names to track
             collect_ops: If True, return full operation info for histogram collection
+            collect_detailed: If True, return detailed info including path and syscall
 
         Returns:
             If collect_ops is False: (op_type, bytes_transferred)
             If collect_ops is True: {'type': op_type, 'bytes': bytes_transferred}
+            If collect_detailed is True: {'path': str, 'operation': str, 'syscall': str, 'size_bytes': int}
         """
         # Match patterns like: PID syscall(fd, ..., size) = result
         match = strace_pattern.match(line)
         if not match:
-            return None if collect_ops else (None, 0)
+            return None if (collect_ops or collect_detailed) else (None, 0)
 
-        pid, syscall, result = match.groups()
-        syscall = syscall.lower()
+        pid, syscall_raw, result = match.groups()
+        syscall = syscall_raw.lower()
 
         # Check if it's one of the I/O syscalls we're tracking
         if syscall not in io_syscalls:
-            return None if collect_ops else (None, 0)
+            return None if (collect_ops or collect_detailed) else (None, 0)
 
         # Determine if it's a read or write operation based on syscall name
         if "read" in syscall:
@@ -150,25 +166,38 @@ class Collector:
         elif "write" in syscall:
             is_read = False
         else:
-            return None if collect_ops else (None, 0)
+            return None if (collect_ops or collect_detailed) else (None, 0)
 
         # The return value is the number of bytes transferred (or -1 on error)
         bytes_transferred = int(result)
         if bytes_transferred < 0:
-            return None if collect_ops else (None, 0)
+            return None if (collect_ops or collect_detailed) else (None, 0)
 
         op_type = "read" if is_read else "write"
 
-        if collect_ops:
+        # Try to extract file path from fd with -y flag format: fd</path/to/file>
+        path_match = re.search(r'\d+<([^>]+)>', line)
+        path = path_match.group(1) if path_match else ""
+
+        if collect_detailed:
+            return {
+                "path": path,
+                "operation": op_type,
+                "syscall": syscall_raw,
+                "size_bytes": bytes_transferred,
+            }
+        elif collect_ops:
             return {"type": op_type, "bytes": bytes_transferred}
         return op_type, bytes_transferred
 
-    def parse_strace_line(self, line, collect_ops=False):
+    def parse_strace_line(self, line, collect_ops=False, collect_detailed=False):
         """Parse a single strace output line for I/O operations (instance method)
 
         This is a convenience wrapper that uses the instance's strace pattern and syscalls.
         """
-        return self.parse_strace_line_static(line, self._strace_pattern, self._io_syscalls, collect_ops)
+        return self.parse_strace_line_static(
+            line, self._strace_pattern, self._io_syscalls, collect_ops, collect_detailed
+        )
 
     @staticmethod
     def _create_helper_script(pid, output_file, control_file):
@@ -226,12 +255,13 @@ exit 0
         )
         return proc
 
-    def measure_macos_osascript(self, code, collect_ops=False):
+    def measure_macos_osascript(self, code, collect_ops=False, collect_detailed=False):
         """Measure IOPS on macOS using fs_usage via osascript
 
         Args:
             code: The code to profile
             collect_ops: If True, collect individual operation sizes for histogram
+            collect_detailed: If True, collect detailed I/O data for DataFrame
         """
         pid = os.getpid()
 
@@ -296,11 +326,23 @@ exit 0
             read_bytes = 0
             write_bytes = 0
             operations = [] if collect_ops else None
+            detailed_data = [] if collect_detailed else None
 
             if os.path.exists(output_file):
                 with open(output_file, "r") as f:
                     for line in f:
-                        if collect_ops:
+                        if collect_detailed:
+                            detail = self.parse_fs_usage_line(line, collect_detailed=True)
+                            if detail:
+                                detailed_data.append(detail)
+                                # Also update counts for regular metrics
+                                if detail["operation"] == "read":
+                                    read_count += 1
+                                    read_bytes += detail["size_bytes"]
+                                elif detail["operation"] == "write":
+                                    write_count += 1
+                                    write_bytes += detail["size_bytes"]
+                        elif collect_ops:
                             op = self.parse_fs_usage_line(line, collect_ops=True)
                             if op:
                                 operations.append(op)
@@ -331,6 +373,9 @@ exit 0
             if collect_ops:
                 result["operations"] = operations
 
+            if collect_detailed:
+                result["detailed_data"] = detailed_data
+
             return result
 
         finally:
@@ -355,12 +400,13 @@ exit 0
                 except OSError:
                     pass  # File already deleted or permission issue
 
-    def measure_linux_strace(self, code, collect_ops=False):
+    def measure_linux_strace(self, code, collect_ops=False, collect_detailed=False):
         """Measure IOPS on Linux using strace (no elevated privileges required)
 
         Args:
             code: The code to profile
             collect_ops: If True, collect individual operation sizes for histogram
+            collect_detailed: If True, collect detailed I/O data for DataFrame
         """
         pid = os.getpid()
 
@@ -385,6 +431,7 @@ exit 0
             strace_cmd = [
                 "strace",
                 "-f",  # Follow forks
+                "-y",  # Print paths associated with file descriptor arguments
                 "-e",
                 f"trace={syscalls_to_trace}",
                 "-o",
@@ -432,12 +479,24 @@ exit 0
             read_bytes = 0
             write_bytes = 0
             operations = [] if collect_ops else None
+            detailed_data = [] if collect_detailed else None
 
             if os.path.exists(output_file):
                 try:
                     with open(output_file, "r", errors="ignore") as f:
                         for line in f:
-                            if collect_ops:
+                            if collect_detailed:
+                                detail = self.parse_strace_line(line, collect_detailed=True)
+                                if detail:
+                                    detailed_data.append(detail)
+                                    # Also update counts for regular metrics
+                                    if detail["operation"] == "read":
+                                        read_count += 1
+                                        read_bytes += detail["size_bytes"]
+                                    elif detail["operation"] == "write":
+                                        write_count += 1
+                                        write_bytes += detail["size_bytes"]
+                            elif collect_ops:
                                 op = self.parse_strace_line(line, collect_ops=True)
                                 if op:
                                     operations.append(op)
@@ -469,6 +528,9 @@ exit 0
 
             if collect_ops:
                 result["operations"] = operations
+
+            if collect_detailed:
+                result["detailed_data"] = detailed_data
 
             return result
 

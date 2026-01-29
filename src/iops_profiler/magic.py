@@ -41,13 +41,17 @@ class IOPSProfiler(Magics):
         Returns:
             Dictionary with profiling results
         """
-        # Determine if we should collect individual operations
+        # Determine if we should collect individual operations or detailed data
         collect_ops = show_histogram
+        # Always collect detailed data for the iops_detailed_data variable
+        collect_detailed = True
 
         # Determine measurement method based on platform
         if self.platform == "darwin":  # macOS
             try:
-                results = self.collector.measure_macos_osascript(code, collect_ops=collect_ops)
+                results = self.collector.measure_macos_osascript(
+                    code, collect_ops=collect_ops, collect_detailed=collect_detailed
+                )
             except RuntimeError as e:
                 if "Resource busy" in str(e):
                     print("⚠️ ktrace is busy. Falling back to system-wide measurement.")
@@ -65,7 +69,9 @@ class IOPSProfiler(Magics):
         elif self.platform in ("linux", "linux2"):
             # Use strace on Linux (no elevated privileges required)
             try:
-                results = self.collector.measure_linux_strace(code, collect_ops=collect_ops)
+                results = self.collector.measure_linux_strace(
+                    code, collect_ops=collect_ops, collect_detailed=collect_detailed
+                )
             except (RuntimeError, FileNotFoundError) as e:
                 print(f"⚠️ Could not use strace: {e}")
                 print("Falling back to psutil per-process measurement.\n")
@@ -140,6 +146,23 @@ class IOPSProfiler(Magics):
             # Display histograms if requested and available
             if show_histogram and "operations" in results:
                 display.generate_histograms(results["operations"])
+
+            # Inject detailed I/O data into user namespace
+            if "detailed_data" in results and results["detailed_data"]:
+                # Convert detailed data list to DataFrame
+                try:
+                    import pandas as pd
+
+                    df = pd.DataFrame(results["detailed_data"])
+                    self.shell.user_ns["iops_detailed_data"] = df
+                except ImportError:
+                    # pandas not available - store raw data
+                    self.shell.user_ns["iops_detailed_data"] = results["detailed_data"]
+            else:
+                # No detailed data available (psutil mode or fallback)
+                self.shell.user_ns[
+                    "iops_detailed_data"
+                ] = "Detailed I/O data not available: profiling uses psutil mode which only provides aggregate metrics"
 
         except Exception as e:
             print(f"❌ Error during IOPS profiling: {e}")
